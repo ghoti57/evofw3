@@ -1,3 +1,12 @@
+/*********************************************************
+*
+* cc1101.h
+* ========
+*
+* Hardware interface to TI CC1101 radio chip
+*
+*/
+
 #ifndef _CC1101_H_
 #define _CC1101_H_
 
@@ -6,10 +15,9 @@
 extern uint8_t cc_put_octet( uint8_t octet );
 extern void cc_tx_trigger(void);
 
-typedef uint8_t (*accept_bit_fn)(uint8_t);
-typedef uint8_t (*request_bit_fn)(void);
+extern uint8_t cc_read_rssi(void);
 
-extern void cc_init(accept_bit_fn a, request_bit_fn r);
+extern void cc_init(void);
 extern void cc_work(void);
 
 #endif
