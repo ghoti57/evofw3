@@ -519,92 +519,9 @@ static void msg_rx_end(void) {
   msgRx = NULL;
 }
 
-void msg_work(void) {
-  struct message *msg = msg_get();
-  if( msg != NULL ) {
-	msg_print( msg );
-    msg_free( msg );
-  }
-}
 
-/********************************************************
-** Message RX byte ISR
-********************************************************/
-
-static uint8_t *rx_edges;
-static uint8_t rx_nEdges;
-void msg_rx_edges( uint8_t *edges, uint8_t nEdges ) {
-  rx_edges = edges;
-  rx_nEdges = nEdges;
-
-  SW_INT_PIN |= SW_INT_IN;
-}
-
-void msg_rx_byte(uint8_t byte) {
-  msg_rx_edges( NULL, byte );
-}
-
-static uint8_t msg_process_edges( uint8_t *edges, uint8_t nEdges ) {
-  uint8_t rx_byte = 0;
-  uint8_t rx_t = 0;
-  uint8_t rx_tBit = ONE_BIT;
-  uint8_t rx_isHi = 0;
-  uint8_t rx_hi = 0;
-
-  while( nEdges-- ) {
-
-	uint8_t interval = *(edges++);
-    if( interval < TEN_BITS_MAX ) { // 
-      uint8_t samples = interval - rx_t;
-      while( samples ) {
-        uint8_t tBit = rx_tBit - rx_t;
-        if( tBit > samples )
-          tBit = samples;
-  
-        if( rx_isHi ) rx_hi += tBit;
-
-        rx_t += tBit;
-        samples -= tBit;
-
-        // BIT complete?	  
-        if( rx_t==rx_tBit ) {
-		  if( rx_tBit == ONE_BIT ) { // START BIT
-		  }
-          else if( rx_tBit < TEN_BITS ) {  
-            uint8_t bit = ( rx_hi > HALF_BIT );
-            rx_byte <<= 1;
-            rx_byte  |= bit;
-          } 
-
-          rx_tBit += ONE_BIT;
-          rx_hi = 0;
-        }
-      }
-    }
-
-    if( rx_tBit > NINE_BITS ) { // BYTE available
-      msg_last_byte( rx_byte );  // tell frame
-	  break;
-    }
-
-	// Edges toggle level
-    rx_isHi ^= 1;
-  }
-
-  return rx_byte;
-}
-
-ISR(SW_INT_VECT) {
-  uint8_t byte;
-  // Very important that we don't block interrupts
-  // As this interferes with subsequent edge measurements
-  sei();
+void msg_rx_byte( uint8_t byte ) {
   DEBUG_MSG(1);
-
-  if( rx_edges )
-    byte = msg_process_edges( rx_edges, rx_nEdges );
-  else
-	byte = rx_nEdges;
 
   if( byte==MSG_START ) {
     msg_rx_start();
@@ -619,6 +536,14 @@ ISR(SW_INT_VECT) {
   DEBUG_MSG(0);
 }
 
+void msg_work(void) {
+  struct message *msg = msg_get();
+  if( msg != NULL ) {
+	msg_print( msg );
+    msg_free( msg );
+  }
+}
+
 /********************************************************
 ** System startup
 ********************************************************/
@@ -631,12 +556,6 @@ static void msg_create_pool(void) {
 }
 
 void msg_init(void) {
-  SW_INT_DDR  |= SW_INT_IN;
-  SW_INT_MASK |= SW_INT_IN;
-
-  PCIFR  = SW_INT_ENBL;
-  PCICR |= SW_INT_ENBL;
-  
   msg_create_pool();
 }
 

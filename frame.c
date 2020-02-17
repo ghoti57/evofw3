@@ -12,6 +12,35 @@
 #define DEBUG_EDGE(_v)     DEBUG2(_v)
 #define DEBUG_FRAME(_v)    DEBUG3(_v)
 
+/***************************************************************
+** BIT constants
+** These are based on a 500 KHz clock
+** 500000/38400 is almost exactly 13
+**
+** Clock rates that are multiples of 500 KHz cause these
+** constants to increase such that they do not all fit 
+** in uint8_t variables.
+**
+** Maintaining the variables as uint8_t significantly improves
+** the efficiency of the RX processing code.
+*/
+#define BAUD_RATE 38400
+
+#define ONE_BIT  13
+#define HALF_BIT 6
+#define BIT_TOL  4
+
+#define MIN_BIT  ( ONE_BIT - BIT_TOL )
+#define MAX_BIT  ( ONE_BIT + BIT_TOL )
+
+#define NINE_BITS		( 9 * ONE_BIT )
+#define NINE_BITS_MIN	( NINE_BITS - HALF_BIT )
+#define NINE_BITS_MAX	( NINE_BITS + HALF_BIT )
+
+#define TEN_BITS		( 10 * ONE_BIT )
+#define TEN_BITS_MIN	( TEN_BITS - HALF_BIT )
+#define TEN_BITS_MAX	( TEN_BITS + HALF_BIT )
+
 /***********************************************************************************
 ** RX Frame state machine
 */
@@ -43,11 +72,14 @@ static struct rx_state {
   uint8_t nByte;
   uint8_t lastByte;
 
+  // Edge buffers
   uint8_t Edges[2][24];
-  uint8_t *edges;
-  uint8_t nEdges;
-
+  uint8_t NEdges[2];
+  
+  // Current edges
   uint8_t idx;
+  uint8_t nEdges;
+  uint8_t *edges;
 } rx;
 
 static void rx_reset(void) {
@@ -210,13 +242,14 @@ void msg_last_byte(uint8_t byte) {
 
 static void rx_byte(void) {
   rx.nByte++;
-  DEBUG_EDGE( rx.nByte & 1 );
   
-  msg_rx_edges( rx.edges, rx.nEdges );
-
+  // Switch edge buffer
+  rx.NEdges[rx.idx] = rx.nEdges;
   rx.idx ^= 1;
   rx.edges = rx.Edges[rx.idx];
   rx.nEdges = 0;
+
+  SW_INT_PIN |= SW_INT_IN;
 }
 
 static uint8_t rx_frame(uint8_t interval) {
@@ -332,6 +365,75 @@ static void rx_init(void) {
   SREG = sreg;
 }
 
+/********************************************************
+** Edge analysis ISR
+** In order to avoid delaying the measurement of edges
+** the analysis of the edges is run in a lowewr priority
+** ISR.
+********************************************************/
+
+static uint8_t rx_process_edges( uint8_t *edges, uint8_t nEdges ) {
+  uint8_t rx_byte = 0;
+  uint8_t rx_t = 0;
+  uint8_t rx_tBit = ONE_BIT;
+  uint8_t rx_isHi = 0;
+  uint8_t rx_hi = 0;
+
+  DEBUG_EDGE( 1 );
+
+  while( nEdges-- ) {
+
+	uint8_t interval = *(edges++);
+    if( interval < TEN_BITS_MAX ) { // 
+      uint8_t samples = interval - rx_t;
+      while( samples ) {
+        uint8_t tBit = rx_tBit - rx_t;
+        if( tBit > samples )
+          tBit = samples;
+  
+        if( rx_isHi ) rx_hi += tBit;
+
+        rx_t += tBit;
+        samples -= tBit;
+
+        // BIT complete?	  
+        if( rx_t==rx_tBit ) {
+		  if( rx_tBit == ONE_BIT ) { // START BIT
+		  }
+          else if( rx_tBit < TEN_BITS ) {  
+            uint8_t bit = ( rx_hi > HALF_BIT );
+            rx_byte <<= 1;
+            rx_byte  |= bit;
+          } 
+
+          rx_tBit += ONE_BIT;
+          rx_hi = 0;
+        }
+      }
+    }
+
+	// Edges toggle level
+    rx_isHi ^= 1;
+  }
+
+  DEBUG_EDGE( 0 );
+
+  return rx_byte;
+}
+
+ISR(SW_INT_VECT) {
+  // Very important that we don't block interrupts
+  // As this interferes with subsequent edge measurements
+  sei();
+
+  // Extract byte from previous edges
+  rx.lastByte = rx_process_edges( rx.Edges[1-rx.idx], rx.NEdges[1-rx.idx] );
+  
+  // And pass it on to message to process
+  msg_rx_byte( rx.lastByte );
+}
+
+
 //---------------------------------------------------------------------------------
 
 static void rx_start(void) {
@@ -346,6 +448,12 @@ static void rx_start(void) {
   EICRA |= ( 1 << GDO0_INT_ISCn0 );   // rising and falling edge
   EIFR   = GDO0_INT_MASK ;     // Acknowledge any  previous edges
   EIMSK |= GDO0_INT_MASK ;     // Enable interrupts
+  
+  SW_INT_DDR  |= SW_INT_IN;
+  SW_INT_MASK |= SW_INT_IN;
+
+  PCIFR  = SW_INT_ENBL;
+  PCICR |= SW_INT_ENBL;
   
   SREG = sreg;
 
