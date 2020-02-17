@@ -16,6 +16,17 @@
 
 #define DEBUG_MSG(_v) DEBUG4(_v)
 
+#define _MSG_ERR_LIST \
+  _MSG_ERR( MSG_SIG_ERR,   "Bad Signature" ) \
+  _MSG_ERR( MSG_MANC_ERR,  "Invalid Manchester Code" ) \
+  _MSG_ERR( MSG_CSUM_ERR,  "Checksum error" ) \
+  _MSG_ERR( MSG_TRUNC_ERR, "Truncated" ) \
+  
+#define _MSG_ERR(_e,_t) , _e
+enum msg_err_code { MSG_OK _MSG_ERR_LIST, MSG_ERR_MAX };
+#undef _MSG_ERR
+
+
 /*******************************************************
 * Manchester Encoding
 *
@@ -139,6 +150,8 @@ inline void set_response(uint8_t *flags)    { *flags = F_RP; }
 #define F_OPCODE 0x01
 #define F_LEN    0x02
 
+#define F_OPTION ( F_ADDR0 + F_ADDR1 + F_ADDR2 + F_PARAM0 + F_PARAM1 )
+
 static const uint8_t header_flags[16] = {
   F_RQ + F_ADDR0+F_ADDR1+F_ADDR2 ,
   F_RQ +                 F_ADDR2 ,
@@ -177,14 +190,6 @@ static uint8_t get_header( uint8_t flags ) {
 #define HDR_PARAM1 0x01
 inline uint8_t hdr_param0(uint8_t header)    { return header & HDR_PARAM0; }
 inline uint8_t hdr_param1(uint8_t header)    { return header & HDR_PARAM1; }
-
-enum msg_error {
-  MSG_OK,
-  MSG_SIG_ERR,
-  MSG_MANC_ERR,
-  MSG_CSUM_ERR,
-};
-
 
 /********************************************************
 ** Message Print
@@ -260,9 +265,16 @@ static void msg_print_payload( uint8_t *payload, uint8_t valid ) {
 }
 
 static void msg_print_error( uint8_t error ) {
+#define _MSG_ERR(_e,_t) , _t
+ static char const *const msg_err[MSG_ERR_MAX] = { "" _MSG_ERR_LIST };
+#undef _MSG_ERR
+
   if( error ) {
-	tty_write_str("* error ");
-	tty_write_hex(error);
+	tty_write_str("* ");
+	if( error < MSG_ERR_MAX )
+      tty_write_str( msg_err[error] );
+    else
+      tty_write_str("UNKNOWN");
   }
 }
 
@@ -277,6 +289,9 @@ static void msg_print_raw( uint8_t *raw, uint8_t nBytes ) {
 
 static void msg_print( struct message *msg ) {
 
+  tty_write_hex(msg->fields); tty_write_char('.');
+  tty_write_hex(msg->rxFields); tty_write_char(' ');
+  
   msg_print_rssi( msg->rssi, msg->rxFields&F_RSSI );
   msg_print_type( msg->fields & F_MASK );
   msg_print_param( msg->param[0], msg->rxFields&F_PARAM0 );
@@ -364,7 +379,7 @@ enum message_state {
 };
 
 static uint8_t msg_rx_signature( struct message *msg, uint8_t byte ) {
-  static uint8_t signature[] = { 0xCC, 0xAA, 0xCA };
+  static uint8_t const signature[] = { 0xCC, 0xAA, 0xCA };
   uint8_t state = S_SIGNATURE;
   
   // Validate it?
@@ -515,6 +530,12 @@ static void msg_rx_start(void) {
 }
 
 static void msg_rx_end(void) {
+  // All optional fields received as expected
+  if(   ( ( msgRx->rxFields & F_OPTION ) != ( msgRx->fields & F_OPTION ) )
+	 || ( msgRx->len != msgRx->nPayload ) ) {
+    msgRx->error = MSG_TRUNC_ERR;
+  }
+
   msg_ready( msgRx );
   msgRx = NULL;
 }
