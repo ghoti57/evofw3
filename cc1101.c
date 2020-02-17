@@ -110,9 +110,9 @@ static void cc_enter_rx_mode(void) {
 uint8_t cc_read_rssi(void) {
   // CC1101 Section 17.3
   int8_t rssi = (int8_t )cc_read( CC1100_RSSI );
-  rssi = rssi/2 - 74;  // answer in range -138 to -74 
+  rssi = rssi/2 - 74;  // answer in range -138 to -10 
   
-  return (uint8_t)( -rssi ); // returns 74 to 138
+  return (uint8_t)( -rssi ); // returns 10 to 138
 }
 	
 void cc_init(void) {
