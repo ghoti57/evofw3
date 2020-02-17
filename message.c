@@ -213,7 +213,7 @@ static void msg_print_type( uint8_t type ) {
 static void msg_print_addr( uint8_t *addr, uint8_t valid ) {
   if( valid ) {
 	uint8_t  class = addr[0] >> 2;
-	uint32_t dev = (uint32_t)( addr[0] & 0xc0 ) << 16
+	uint32_t dev = (uint32_t)( addr[0] & 0x3F ) << 16
 	             | (uint32_t)( addr[1]        ) <<  8
 	             | (uint32_t)( addr[2]        )       ;
 				 
