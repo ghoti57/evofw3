@@ -288,9 +288,6 @@ static void msg_print_raw( uint8_t *raw, uint8_t nBytes ) {
 }
 
 static void msg_print( struct message *msg ) {
-
-  tty_write_hex(msg->fields); tty_write_char('.');
-  tty_write_hex(msg->rxFields); tty_write_char(' ');
   
   msg_print_rssi( msg->rssi, msg->rxFields&F_RSSI );
   msg_print_type( msg->fields & F_MASK );
@@ -531,7 +528,7 @@ static void msg_rx_start(void) {
 
 static void msg_rx_end(void) {
   // All optional fields received as expected
-  if(   ( ( msgRx->rxFields & F_OPTION ) != ( msgRx->fields & F_OPTION ) )
+  if(   ( ( msgRx->rxFields & F_OPTION ) != ( msgRx->fields & ccF_OPTION ) )
 	 || ( msgRx->len != msgRx->nPayload ) ) {
     msgRx->error = MSG_TRUNC_ERR;
   }
