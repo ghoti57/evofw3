@@ -2,19 +2,20 @@
 #include <avr/io.h>
 
 #include "config.h"
+#include "trace.h"
 #include "ringbuf.h"
 #include "tty.h"
 #include "led.h"
 
 static outbound_byte_fn outbound_byte;
 
-static rb_t tx_buffer;
-static rb_t rx_buffer;
+RINGBUF( TX, 128 );
+RINGBUF( RX, 128 );
 
 // TX complete. Send next char; disable interrupt if nothing else to do
 ISR(TTY_UDRE_VECT) {
-  UDR0 = rb_get(&tx_buffer);
-  if (tx_buffer.nbytes == 0) {
+  UDR0 = rb_get(&TX.rb);
+  if( rb_empty(&TX.rb) ) {
     UCSR0B &= ~(1 << UDRIE0);
   }
 }
@@ -25,7 +26,7 @@ ISR(TTY_RX_VECT) {
   uint8_t flags = UCSR0A;
 
   if ((flags & ((1 << FE0) | (1 << DOR0))) == 0) {
-    rb_put(&rx_buffer, data);
+    rb_put( &RX.rb, data);
   }
 }
 
@@ -66,8 +67,8 @@ static void tty_init_uart( uint32_t Fosc, uint32_t bitrate )
 
 void tty_init(outbound_byte_fn o) {
   outbound_byte = o;
-  rb_reset(&tx_buffer);
-  rb_reset(&rx_buffer);
+  rb_reset(&TX.rb);
+  rb_reset(&RX.rb);
 
   tty_init_uart( F_CPU, TTY_BAUD_RATE);
 
@@ -75,24 +76,70 @@ void tty_init(outbound_byte_fn o) {
   UCSR0B = (1 << RXCIE0) | (1 << RXEN0) | (1 << TXEN0);
 }
 
+#define CMD_CHAR '!'
+static uint8_t doCmd = 0;
+
+static struct command {
+  uint8_t cmd;
+  void (*func)(uint8_t len, uint8_t *param );
+} commands[] = {
+  { 'T', trace_cmd },
+  {'\0', 0 }
+};
+
+static void cmd_byte( uint8_t b ) {
+  static uint8_t cmd = '\0';
+  static uint8_t len = 0;
+  static uint8_t param[8];
+
+  if( cmd=='\0' ) {
+    if( b!='\r' && b!='\n' )
+      cmd = b;
+  } else {
+    if( b=='\r' ) {
+      struct command *command = commands;
+
+      while( ( command->cmd != cmd ) && ( command->cmd != '\0' ) ) 
+        command++;
+    
+      if( command->func )
+        ( command->func )( len,param );
+    
+      cmd = '\0';
+      len = 0;
+    } else {
+      if( len<sizeof(param) )
+        param[len++] = b;
+    }
+  }
+  
+  tty_write_char(b);
+  if( b=='\r' )
+    tty_write_char('\n');
+}
+
 void tty_work(void) {
-  if (rx_buffer.nbytes) {
+  if( !rb_empty(&RX.rb) ) {
     led_toggle();
-    uint8_t b = rb_get(&rx_buffer);
-    outbound_byte(b);
+    uint8_t b = rb_get(&RX.rb);
+    if( b==CMD_CHAR )
+    {
+      doCmd = 1;
+      tty_write_char(b);
+    }
+    else if( doCmd )
+      cmd_byte(b);
+    else
+      outbound_byte(b);
   }
 }
 
 void tty_write_char(char c) {
-  // Silently drop characters if the buffer is full...
-  if ((tx_buffer.nbytes < RINGBUF_SIZE - 2) ||
-      (tx_buffer.nbytes < RINGBUF_SIZE && (c == '\r' || c == '\n'))) {
-    rb_put(&tx_buffer, c);
-    UCSR0B |= (1 << UDRIE0);  // Enable transmit interrupt
-  }
+  while( !( UCSR0A & ( 1<<UDRE0 ) ) );
+  UDR0 = c;
 }
 
-void tty_write_str(char *s) {
+void tty_write_str(char const *s) {
   while (*s) tty_write_char(*s++);
 }
 

@@ -4,28 +4,32 @@
 #include <stdint.h>
 #include "config.h"
 
-#if RINGBUF_SIZE < 256
-typedef struct
-{
-  uint8_t putoff;
-  uint8_t getoff;
-  uint8_t nbytes;
-  char buf[RINGBUF_SIZE];
-} volatile rb_t;
-#else
-typedef struct
-{
-  uint16_t putoff;
-  uint16_t getoff;
-  uint16_t nbytes;
-  char buf[RINGBUF_SIZE];
-} volatile rb_t;
-#endif
+typedef struct ringbuf {
+  uint8_t read;
+  uint8_t write;
+  const uint8_t length;
+  uint8_t buffer[2];
+} rb_t;
 
-void rb_put(rb_t *rb, uint8_t data);
-uint8_t rb_get(rb_t *rb);
-void rb_reset(rb_t *rb);
-uint8_t rb_empty(rb_t *rb);
-uint8_t rb_full(rb_t *rb);
+extern void     rb_put(rb_t *rb, uint8_t data);
+extern uint8_t  rb_get(rb_t *rb);
+extern void     rb_reset(rb_t *rb);
+extern uint8_t  rb_empty(rb_t *rb);
+extern uint8_t  rb_full(rb_t *rb);
+extern uint8_t rb_space(rb_t *rb);
+extern uint8_t rb_available(rb_t *rb);
+
+/********************************************************************
+** use RINGBUF to declare ring buffer in code file that owns buffer
+** e.g.
+** RINGBUF( RX,256 );
+** RINGBUF( TX, 64 );
+** you cannot refer to the ringbuffer outside that file.
+**
+** to pass the ringbuffer to the functions declared above use &name.rb
+** e.g.
+** if( !rb_empty( &RX.rb );
+**/
+#define RINGBUF( NAME, LEN ) static struct NAME##_rb{ rb_t rb; uint8_t buffer_extension[LEN-2]; } NAME = { { 0,0,LEN,{0,0} }, {0}}
 
 #endif
