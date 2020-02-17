@@ -206,7 +206,7 @@ static void msg_print_rssi( uint8_t rssi, uint8_t valid ) {
 }
 		
 static void msg_print_type( uint8_t type ) {
-  static char const * const Type[4] = { "RQ ", "I  ","W  ","RP " };
+  static char const * const Type[4] = { "RQ ", " I ","W  ","RP " };
   tty_write_str( Type[type] );
 }
 		
