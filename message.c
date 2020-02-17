@@ -528,7 +528,7 @@ static void msg_rx_start(void) {
 
 static void msg_rx_end(void) {
   // All optional fields received as expected
-  if(   ( ( msgRx->rxFields & F_OPTION ) != ( msgRx->fields & ccF_OPTION ) )
+  if(   ( ( msgRx->rxFields & F_OPTION ) != ( msgRx->fields & F_OPTION ) )
 	 || ( msgRx->len != msgRx->nPayload ) ) {
     msgRx->error = MSG_TRUNC_ERR;
   }
