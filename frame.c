@@ -40,6 +40,7 @@
 #define TEN_BITS		( 10 * ONE_BIT )
 #define TEN_BITS_MIN	( TEN_BITS - HALF_BIT )
 #define TEN_BITS_MAX	( TEN_BITS + HALF_BIT )
+#define STOP_BITS_MAX   ( 12 * ONE_BIT + HALF_BIT )
 
 /***********************************************************************************
 ** RX Frame state machine
@@ -258,7 +259,7 @@ static uint8_t rx_frame(uint8_t interval) {
   rx.edges[rx.nEdges++] = interval;
   
   if( interval>TEN_BITS_MIN ) {
-    if( interval < TEN_BITS_MAX ) { // Possible stop bit
+    if( interval < STOP_BITS_MAX ) { // Possible stop bit
 	  if( !rx.level ) { // Was a falling edge so probably valid stop bit
 	    rx_byte();
 		state = RX_FRAME0;
@@ -384,7 +385,7 @@ static uint8_t rx_process_edges( uint8_t *edges, uint8_t nEdges ) {
   while( nEdges-- ) {
 
 	uint8_t interval = *(edges++);
-    if( interval < TEN_BITS_MAX ) { // 
+    if( rx_tBit < TEN_BITS ) { // 
       uint8_t samples = interval - rx_t;
       while( samples ) {
         uint8_t tBit = rx_tBit - rx_t;
@@ -440,20 +441,20 @@ static void rx_start(void) {
   uint8_t sreg = SREG;
   cli();
 
-
   // Make sure configured as input in case shared with TX
   GDO0_DDR  &= ~GDO0_IN;
   GDO0_PORT |=  GDO0_IN;		 // Set input pull-up
   
   EICRA |= ( 1 << GDO0_INT_ISCn0 );   // rising and falling edge
-  EIFR   = GDO0_INT_MASK ;     // Acknowledge any  previous edges
+  EIFR   = GDO0_INT_MASK ;     // Acknowledge any previous edges
   EIMSK |= GDO0_INT_MASK ;     // Enable interrupts
   
+  // Configure SW interrupt for edge processing
   SW_INT_DDR  |= SW_INT_IN;
   SW_INT_MASK |= SW_INT_IN;
 
-  PCIFR  = SW_INT_ENBL;
-  PCICR |= SW_INT_ENBL;
+  PCIFR  = SW_INT_ENBL;	// Acknowledge any previous event
+  PCICR |= SW_INT_ENBL;	// and enable
   
   SREG = sreg;
 
