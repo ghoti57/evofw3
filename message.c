@@ -151,6 +151,7 @@ inline void set_response(uint8_t *flags)    { *flags = F_RP; }
 #define F_LEN    0x02
 
 #define F_OPTION ( F_ADDR0 + F_ADDR1 + F_ADDR2 + F_PARAM0 + F_PARAM1 )
+#define F_MAND   ( F_OPCODE + F_LEN )
 
 static const uint8_t header_flags[16] = {
   F_RQ + F_ADDR0+F_ADDR1+F_ADDR2 ,
@@ -529,6 +530,7 @@ static void msg_rx_start(void) {
 static void msg_rx_end(void) {
   // All optional fields received as expected
   if(   ( ( msgRx->rxFields & F_OPTION ) != ( msgRx->fields & F_OPTION ) )
+	 || ( ( msgRx->rxFields & F_MAND   ) != F_MAND  )
 	 || ( msgRx->len != msgRx->nPayload ) ) {
     msgRx->error = MSG_TRUNC_ERR;
   }
