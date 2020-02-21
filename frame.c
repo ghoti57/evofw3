@@ -49,11 +49,12 @@
 enum rx_states {
   RX_OFF,
   RX_IDLE,		// Make sure we've seen an edge for valid interval calculations
-  RX_PREAMBLE0, // Look for a ZERO bit
-  RX_PREAMBLE1, // Look for a ONE bit
-  RX_SYNC0,		// Check for SYNC0 (0xFF) - revert to RX_START if not found
-  RX_SYNC1,		// Check for SYNC1 (0x00) - revert to RX_START if not found
-  RX_STOP,		// Check for STOP bit - revert to RX_START if not found
+  // FRAME DETECT states, keep track of preamble/training bits
+  RX_HIGH, 		// Check HIGH signal, includes SYNC0 check (0xFF)
+  RX_LOW, 		// Check LOW signal
+  RX_SYNC1,		// Check for SYNC1 (0x00) - revert to RX_HIGH if not found
+  RX_STOP,		// Wait for STOP bit to obtain BYTE SYNCH
+  // FRAME PROCESS  states
   RX_FRAME0,	// First edge in byte within frame
   RX_FRAME,		// Rest of byte
   RX_DONE		// End of frame reached - discard everything
@@ -98,12 +99,21 @@ static void rx_start(void);
 /***********************************************************************************
 ** FRAME detection
 **
-** A frame begins with ...0101s<FF>ps<00>p
-** since s=0 and p=1 we can just look for the following pattern
-** 1x1 1x0 9x1 9x0 1x1
+** A frame should begin with ...0101s<FF>ps<00>p...
+**   ...<training >< SYNC WORD>...
 **
-** If the pattern fails at any point normally go back to the corresponding
-** 1x0 or 1x1
+** However, we have seen devices break this pattern
+** e.g. no preamble bits from HR80s
+**      extended STOP bit from DTS92 and possibly others
+**      extended SYNC1 from DTS92(?)
+**
+** To detect frames we'll just monitor intervals of HIGH and LOW signal.
+**
+** If we see something that looks like SYNC0 (0xFF) we'll explitly
+** check for SYNC0 (0x00). If we see that we'll decide we've seen a frame.
+** 
+** Once we've made this decision we'll just wait for the STOP BIT so
+** we can get BYTE synchronisation.
 **
 ** This is a very lightweight approach to detecting start of frame
 ** when there's likely to be a lot of noise 
@@ -116,104 +126,87 @@ static uint8_t rx_idle( void) {
   uint8_t state = RX_IDLE;
 
   if( rx.level )
-    state = RX_PREAMBLE0;
+    state = RX_HIGH;
 	
   return state;
 }
 
 //-----------------------------------------------------------------------------
-// look for single 0 bit
-static uint8_t rx_preamble0( uint8_t interval ) {
-  uint8_t state = RX_PREAMBLE0;		// Stay here until we see a ZERO
-
-  if( rx.level ) { // rising edge - was previous LOW correct length?
-    if( interval >= MIN_BIT && interval <= MAX_BIT ) {
-	  rx.preamble++;
-      state = RX_SYNC0;
-    } else {
-	  rx.preamble = 0;
-	  state = RX_PREAMBLE1;
-	}
-  }
-  
-  return state;
-}
-
-//-----------------------------------------------------------------------------
-// look for single 1 bit
-static uint8_t rx_preamble1( uint8_t interval ) {
-  uint8_t state = RX_PREAMBLE1;		// Stay here until we see a ONE
-
-  if( !rx.level ) { // falling edge - was previous HIGH correct length?
-    if( interval >= MIN_BIT && interval <= MAX_BIT ) {
-	  rx.preamble++;
-	} else {
-	  rx.preamble = 0;
-	}
-    state = RX_PREAMBLE0;
+// Keep track of preamble/training bits
+static void rx_preamble( uint8_t interval ) {
+  if( interval >= MIN_BIT && interval <= MAX_BIT ) {
+    // make sure we don't overflow
+	if( rx.preamble < 8*8 )
+      rx.preamble++;
   } else {
     rx.preamble = 0;
   }
-
-  return state;
 }
 
 //-----------------------------------------------------------------------------
-// look for nine succesive 1s
-static uint8_t rx_sync0( uint8_t interval ) {
-  uint8_t state = RX_IDLE;	// Will never actually go here
+// check high signals
+static uint8_t rx_high( uint8_t interval ) {
+  uint8_t state = RX_HIGH;		// Stay here until we see a LOW
 
-  if( !rx.level ) { // falling edge - was previous HIGH correct length?
-    if( interval >= NINE_BITS_MIN && interval <= NINE_BITS_MAX ) {
-	  rx.preamble = 0;
-	  state = RX_SYNC1;
-	} else {
-	  state = rx_preamble1( interval );
-	}
-  } else {
-	rx.preamble = 0;
-    state = rx_preamble0( interval );
+  if( !rx.level ) { // falling edge
+   if( interval >= NINE_BITS_MIN && interval <= NINE_BITS_MAX )
+      state = RX_SYNC1;	// This was SYNC0, go look explicitly for SYNC1
+    else
+      state = RX_LOW;
+
+    rx_preamble( interval );
   }
   
   return state;
 }
 
 //-----------------------------------------------------------------------------
-// look for nine succesive 0s
-static uint8_t rx_sync1( uint8_t interval ) {
-  uint8_t state = RX_IDLE;	// Will never actually go here
+// check low signals
+static uint8_t rx_low( uint8_t interval ) {
+  uint8_t state = RX_LOW;		// Stay here until we see a HIGH
 
-  if( rx.level ) {  // rising edge - was previous LOW correct length?
-    if( interval >= NINE_BITS_MIN && interval <= NINE_BITS_MAX ) {
-	  state = RX_STOP;
-    } else {
-      state = rx_preamble0( interval );
-	} 
-  } else {
-    state = rx_preamble1( interval );
+  if( rx.level ) { // rising edge
+    state = RX_HIGH;
+
+    rx_preamble( interval );
+  }
+  
+  return state;
+}
+
+static uint8_t rx_sync1( uint8_t interval ) {
+  uint8_t state = RX_SYNC1;		// Stay here until we see a HIGH
+
+  if( rx.level ) {  // rising edge
+  
+    // NOTE: we're accepting 9 or 10 bits here because of observed behaviour
+    if( interval >= NINE_BITS_MIN && interval <= TEN_BITS_MAX )
+	  state = RX_STOP;	// Now we just need the STOP bit for BYTE synch
+    else
+	  state = RX_HIGH;
+
+    rx_preamble( interval );
   }
 
   return state;
 }
 
 //-----------------------------------------------------------------------------
-// look for single 1 bit
+// wait for end of STOP BIT
 static uint8_t rx_stop_bit( uint8_t interval ) {
-  uint8_t state = RX_IDLE;	// Will never actually go here
+  uint8_t state = RX_STOP;		// Stay here until we see a LOW
 
-  if( !rx.level ) {  // falling edge - was previous HIGH correct length?
-    if( interval >= MIN_BIT && interval <= MAX_BIT ) {
+  if( !rx.level ) {  // falling edge
+    // NOTE: we're not going to validate the STOP bit length
+	// Observed behavior of some devices is to generate extended ones
+	// If we have mistaken the SYNC WORD we'll soon fail.
 	  state = RX_FRAME0;
 	  rx_frame_start();
-    } else {
-	  state = rx_preamble1( interval );
-    }
-  } else {
-    state = rx_preamble0( interval );
   }
-
+  
   return state;
 }
+
 
 
 /***************************************************************************
@@ -288,18 +281,17 @@ static uint8_t rx_edge(uint8_t interval) {
   uint8_t synch = 1;
 
   switch( rx.state ) {
-  case RX_IDLE:       rx.state = rx_idle();               break;
+  case RX_IDLE:   rx.state = rx_idle();               break;
 
   // Frame detect states
-  case RX_PREAMBLE0:  rx.state = rx_preamble0(interval);  break;
-  case RX_PREAMBLE1:  rx.state = rx_preamble1(interval);  break;
-  case RX_SYNC0:      rx.state = rx_sync0(interval);      break;
-  case RX_SYNC1:      rx.state = rx_sync1(interval);      break;
-  case RX_STOP:       rx.state = rx_stop_bit(interval);   break;
+  case RX_LOW:    rx.state = rx_low(interval);        break;
+  case RX_HIGH:   rx.state = rx_high(interval);       break;
+  case RX_SYNC1:  rx.state = rx_sync1(interval);      break;
+  case RX_STOP:   rx.state = rx_stop_bit(interval);   break;
 
   // Frame processing
-  case RX_FRAME0:     // FRAME0 Only used to signal clock recovery
-  case RX_FRAME:      rx.state = rx_frame(interval);      break;
+  case RX_FRAME0: // FRAME0 Only used to signal clock recovery
+  case RX_FRAME:  rx.state = rx_frame(interval);      break;
   }
 
   // When we're in a frame mode only synch time0 at the end of bytes
