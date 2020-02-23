@@ -89,6 +89,22 @@ static inline void manchester_encode( uint8_t value, uint8_t *byte1, uint8_t *by
 /********************************************************
 ** Message status
 ********************************************************/
+enum message_state {
+  S_SIGNATURE,
+  S_HEADER,
+  S_ADDR0,
+  S_ADDR1,
+  S_ADDR2,
+  S_PARAM0,
+  S_PARAM1,
+  S_OPCODE,
+  S_LEN,
+  S_PAYLOAD,
+  S_CHECKSUM,
+  S_TRAILER,
+  S_COMPLETE,
+  S_ERROR
+};
 
 #define MAX_PAYLOAD 64
 struct message {
@@ -195,115 +211,254 @@ inline uint8_t hdr_param1(uint8_t header)    { return header & HDR_PARAM1; }
 /********************************************************
 ** Message Print
 ********************************************************/
-
-static void msg_print_rssi( uint8_t rssi, uint8_t valid ) {
+static uint8_t msg_print_rssi( char *str, uint8_t rssi, uint8_t valid ) {
+  uint8_t n = 0;
+  
   if( valid ) {
-	char str[8];
-    sprintf(str, "%03u ", rssi );
-    tty_write_str(str);
+    n = sprintf(str, "%03u ", rssi );
   } else {
-	tty_write_str("--- ");
+    n = sprintf(str, "--- ");
   }
+  
+  return n;
 }
 		
-static void msg_print_type( uint8_t type ) {
+static uint8_t msg_print_type( char *str, uint8_t type ) {
   static char const * const Type[4] = { "RQ ", " I "," W ","RP " };
-  tty_write_str( Type[type] );
+  uint8_t n = 0;
+
+  n = sprintf( str, Type[type] );
+
+  return n;
 }
-		
-static void msg_print_addr( uint8_t *addr, uint8_t valid ) {
+	
+static uint8_t msg_print_addr( char *str, uint8_t *addr, uint8_t valid ) {
+  uint8_t n = 0;
+
   if( valid ) {
 	uint8_t  class = addr[0] >> 2;
 	uint32_t dev = (uint32_t)( addr[0] & 0x03 ) << 16
 	             | (uint32_t)( addr[1]        ) <<  8
 	             | (uint32_t)( addr[2]        )       ;
-				 
-	char str[12];
-    sprintf(str, "%02hu:%06lu ", class, dev );
-    tty_write_str(str);
+
+    n = sprintf(str, "%02hu:%06lu ", class, dev );
   } else {
-	tty_write_str("--:------ ");
+	n = sprintf(str, "--:------ ");
   }
+  
+  return n;
 }
 
-static void msg_print_param( uint8_t param, uint8_t valid ) {
+static uint8_t msg_print_param( char *str, uint8_t param, uint8_t valid ) {
+  uint8_t n = 0;
+
   if( valid ) {
-	char str[8];
-    sprintf(str, "%03u ", param );
-    tty_write_str(str);
+    n = sprintf(str, "%03u ", param );
   } else {
-	tty_write_str("--- ");
+	n = sprintf(str, "--- ");
   }
+  
+  return n;
 }
 
-static void msg_print_opcode( uint8_t *opcode, uint8_t valid ) {
+static uint8_t msg_print_opcode( char *str, uint8_t *opcode, uint8_t valid ) {
+  uint8_t n = 0;
+
   if( valid ) {
-    tty_write_hex( opcode[0] );
-    tty_write_hex( opcode[1] );
-    tty_write_char(' ');
+	n = sprintf( str, "%02x%02x ", opcode[0],opcode[1] );
   } else {
-	tty_write_str("???? ");
+	n= sprintf(str, "???? ");
   }
+  
+  return n;
 }
 
-static void msg_print_len( uint8_t len, uint8_t valid ) {
+static uint8_t msg_print_len( char *str, uint8_t len, uint8_t valid ) {
+  uint8_t n = 0;
+
   if( valid ) {
-	char str[8];
-    sprintf(str, "%03u ", len );
-    tty_write_str(str);
+    n = sprintf(str, "%03u ", len );
   } else {
-	tty_write_str("??? ");
+	n = sprintf(str, "??? ");
   }
+  
+  return n;
 }
 
-static void msg_print_payload( uint8_t *payload, uint8_t valid ) {
-  while( valid ) { 
-	tty_write_hex( *payload );
-	payload++;
-	valid--;
-  }
-  tty_write_char(' ');
+static uint8_t msg_print_payload( char *str, uint8_t payload ) {
+  uint8_t n=0;
+  
+  n = sprintf( str,"%02x",payload ); 
+
+  return n;
 }
 
-static void msg_print_error( uint8_t error ) {
+static uint8_t msg_print_error( char *str, uint8_t error ) {
 #define _MSG_ERR(_e,_t) , _t
  static char const *const msg_err[MSG_ERR_MAX] = { "" _MSG_ERR_LIST };
 #undef _MSG_ERR
+  uint8_t n = 0;
 
-  if( error ) {
-	tty_write_str("* ");
-	if( error < MSG_ERR_MAX )
-      tty_write_str( msg_err[error] );
-    else
-      tty_write_str("UNKNOWN");
-  }
+  if( error )
+    n = sprintf( str," * %s\r\n", ( error < MSG_ERR_MAX ) ? msg_err[error] : "UNKNOWN" );
+  else 
+    n = sprintf( str,"\r\n" );
+	  
+  return n;
 }
 
-static void msg_print_raw( uint8_t *raw, uint8_t nBytes ) {
-  while( nBytes ) { 
-	tty_write_hex( *raw );tty_write_char('.');
-	raw++;
-	nBytes--;
-  }
-  tty_write_str("\r\n");
+static uint8_t msg_print_raw( char *str, uint8_t raw ) {
+  uint8_t n = 0;
+
+  n = sprintf( str,"%02x.",raw ); 
+
+  return n;
 }
 
-static void msg_print( struct message *msg ) {
+/************************************************************************************
+** 
+** msg_print_field
+**
+** get the next buffer of output text
+**/
+
+static uint8_t msg_print_field( struct message *msg, char *buff ) {
+  uint8_t nBytes = 0;
+
+  switch( msg->state ) {
+  case S_SIGNATURE:	// Don't print signature, use state for RSSI
+    nBytes = msg_print_rssi( buff, msg->rssi, msg->rxFields&F_RSSI );
+    msg->state = S_HEADER;
+    if( nBytes )
+	  break;
+    /* fallthrough */
+
+  case S_HEADER:
+    nBytes = msg_print_type( buff, msg->fields & F_MASK );
+	msg->state = S_PARAM0;
+    if( nBytes )
+	  break;
+	/* fallthrough */
+
+  case S_PARAM0:
+    nBytes = msg_print_param( buff, msg->param[0], msg->rxFields&F_PARAM0 );
+    msg->state = S_ADDR0;
+    if( nBytes )
+      break;
+    /* fallthrough */
+
+  case S_ADDR0:
+    nBytes = msg_print_addr( buff, msg->addr[0], msg->rxFields&F_ADDR0 );
+    msg->state = S_ADDR1;
+    if( nBytes )
+      break;
+    /* fallthrough */
+
+  case S_ADDR1:
+    nBytes = msg_print_addr( buff, msg->addr[1], msg->rxFields&F_ADDR1 );
+    msg->state = S_ADDR2;
+    if( nBytes )
+      break;
+    /* fallthrough */
+
+  case S_ADDR2:
+    nBytes = msg_print_addr( buff, msg->addr[2], msg->rxFields&F_ADDR2 );
+    msg->state = S_OPCODE;
+    if( nBytes )
+      break;
+    /* fallthrough */
+
+  case S_OPCODE:
+    nBytes = msg_print_opcode( buff, msg->opcode, msg->rxFields&F_OPCODE );
+    msg->state = S_LEN;
+    if( nBytes )
+      break;
+    /* fallthrough */
+
+  case S_LEN:
+    nBytes = msg_print_len( buff, msg->len, msg->rxFields&F_LEN );
+    msg->state = S_PAYLOAD;
+    if( nBytes )
+      break;
+    /* fallthrough */
+
+  case S_PAYLOAD:
+    // Multi buffer field
+    if( msg->count < msg->nPayload ) {
+      nBytes = msg_print_payload( buff, msg->payload[msg->count++] );
+	  if( nBytes )
+	    break;
+    }
+
+	msg->count = 0;
+    msg->state = S_ERROR;
+    /* fallthrough */
+	
+  case S_ERROR:
+    // This always includes "\r\n"
+    nBytes = msg_print_error( buff, msg->error );
+    msg->state = S_TRAILER;
+	if( nBytes )
+	  break;
+    /* fallthrough */
+
+  case S_TRAILER:   // Don't print trailer, use state for raw data
+    // Multi buffer field
+    if( msg->error ){
+      if( msg->count < msg->nBytes ) {
+        nBytes = msg_print_raw( buff, msg->raw[ msg->count++ ] ); 
+      } else if( msg->nBytes ) {
+        nBytes = sprintf( buff, "\r\n" );
+		msg->error = 0;
+	  }
+      if( nBytes )
+        break;
+    }
+
+	msg->count = 0;
+    msg->state = S_COMPLETE; 
+    /* fallthrough */
+	
+  case S_COMPLETE:
+	break;
+  }
   
-  msg_print_rssi( msg->rssi, msg->rxFields&F_RSSI );
-  msg_print_type( msg->fields & F_MASK );
-  msg_print_param( msg->param[0], msg->rxFields&F_PARAM0 );
-  msg_print_addr( msg->addr[0], msg->rxFields&F_ADDR0 );
-  msg_print_addr( msg->addr[1], msg->rxFields&F_ADDR1 );
-  msg_print_addr( msg->addr[2], msg->rxFields&F_ADDR2 );
-  msg_print_opcode( msg->opcode, msg->rxFields&F_OPCODE );
-  msg_print_len( msg->len, msg->rxFields&F_LEN );
-  msg_print_payload( msg->payload, msg->nPayload );
-  msg_print_error( msg->error );
+  return nBytes;
+}
+
+/************************************************************************************
+** 
+** msg_print
+**
+** Called repeatedly from msg_work.
+** Neither this function or any it calls must block or delay
+**
+** Acquires a buffer of output and tries to send it to the serial port
+** If it's not transferred this time, try again until it goes.
+**
+** Keep getting more buffers until we get a zero length buffer
+**
+** We can re-use some of the working fields from struct message to control
+** progress
+**/
+
+static uint8_t msg_print( struct message *msg ) {
+   static char msg_buff[TXBUF];
+   
+  if( msg->state == S_SIGNATURE ) {
+    msg->decoded = 0;
+	msg->count = 0;
+  }
+
+  // Do we still have outstanding text to send?
+  if( msg->decoded ) {
+    msg->decoded -= tty_put_str( (uint8_t *)msg_buff, msg->decoded );
+  }
   
-  tty_write_str("\r\n");
-  
-  if( msg->error ) msg_print_raw( msg->raw, msg->nBytes );
+  if( !msg->decoded ) {
+    msg->decoded = msg_print_field( msg, msg_buff );
+  }
+  return msg->decoded;
 }
 
 /********************************************************
@@ -359,23 +514,6 @@ static struct message *msg_get(void) {
 /********************************************************
 ** RX Message processing
 ********************************************************/
-enum message_state {
-  S_SIGNATURE,
-  S_HEADER,
-  S_ADDR0,
-  S_ADDR1,
-  S_ADDR2,
-  S_PARAM0,
-  S_PARAM1,
-  S_OPCODE,
-  S_LEN,
-  S_PAYLOAD,
-  S_CHECKSUM,
-  S_TRAILER,
-  S_COMPLETE,
-  S_ERROR
-};
-
 static uint8_t msg_rx_signature( struct message *msg, uint8_t byte ) {
   static uint8_t const signature[] = { 0xCC, 0xAA, 0xCA };
   uint8_t state = S_SIGNATURE;
@@ -556,12 +694,32 @@ void msg_rx_byte( uint8_t byte ) {
   DEBUG_MSG(0);
 }
 
+/************************************************************************************
+** 
+** msg_work must not block in any of it's activities
+**
+** Printing a recently received message should not prevent accepting serial input.
+** Accepting serial input should not prevent us printing a new RX message
+**
+**/
+
 void msg_work(void) {
-  struct message *msg = msg_get();
-  if( msg != NULL ) {
-	msg_print( msg );
-    msg_free( msg );
+  static struct message *rx = NULL;
+  
+  // Print RX messages 
+  if( rx ) {
+    if( !msg_print( rx ) ) { 
+      msg_free( rx );
+	  rx = NULL;
+	}
+  } else {
+	rx = msg_get();
+	// If we have a message now we'll start printing it next time
+	if( rx ) {
+      rx->state = S_SIGNATURE;
+    }
   }
+  
 }
 
 /********************************************************
