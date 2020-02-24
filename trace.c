@@ -1,6 +1,7 @@
 /***************************************************************************
 ** trace.c
 */
+#if 0
 #include "tty.h"
 #include "trace.h"
 
@@ -27,3 +28,4 @@ void trace_cmd(uint8_t len, uint8_t *param) {
   if( len > 0 ) trace0 = get_hex(len,param);
   tty_write_str("trace0=");tty_write_hex(trace0);
 }
+#endif
