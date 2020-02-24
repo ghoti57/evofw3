@@ -2,15 +2,14 @@
 #include <avr/wdt.h>
 
 #include "config.h"
-#include "tty.h"
 #include "led.h"
 
 #include "spi.h"
 #include "cc1101.h"
-#include "ringbuf.h"
 
 #include "frame.h"
 #include "message.h"
+#include "tty.h"
 
 void main_init(void) {
   // OSCCAL=((uint32_t)OSCCAL * 10368) / 10000;
@@ -22,7 +21,7 @@ void main_init(void) {
 
   wdt_disable();
   led_init();
-  tty_init(0);
+  tty_init();
 
   // Wire up components
   spi_init();
@@ -36,6 +35,7 @@ void main_init(void) {
 void main_work(void) {
   frame_work();
   msg_work();
+  tty_work();
 }
 
 #ifdef NEEDS_MAIN
