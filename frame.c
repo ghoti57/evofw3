@@ -149,7 +149,7 @@ static uint8_t rx_high( uint8_t interval ) {
   uint8_t state = RX_HIGH;		// Stay here until we see a LOW
 
   if( !rx.level ) { // falling edge
-   if( interval >= NINE_BITS_MIN && interval <= NINE_BITS_MAX )
+   if( interval >= NINE_BITS_MIN ) //&& interval <= NINE_BITS_MAX )
       state = RX_SYNC1;	// This was SYNC0, go look explicitly for SYNC1
     else
       state = RX_LOW;
