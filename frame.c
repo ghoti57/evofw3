@@ -193,7 +193,7 @@ static uint8_t rx_sync1( uint8_t interval ) {
 
 //-----------------------------------------------------------------------------
 // wait for end of STOP BIT
-static uint8_t rx_stop_bit( uint8_t interval ) {
+static uint8_t rx_stop_bit( uint8_t interval __attribute__ ((unused)) ) {
   uint8_t state = RX_STOP;		// Stay here until we see a LOW
 
   if( !rx.level ) {  // falling edge
@@ -317,11 +317,11 @@ static uint8_t rx_edge(uint8_t interval) {
 
 static uint8_t clockShift;
 
-ISR(GDO0_INT_VECT) {
+ISR(GDO2_INT_VECT) {
   DEBUG_ISR(1);
 
   rx.time  = RX_CLOCK;                // Grab a copy of the counter ASAP for accuracy
-  rx.level = ( GDO0_PIN & GDO0_IN );  // and the current level
+  rx.level = ( GDO2_PIN & GDO2_IN );  // and the current level
 
   if( rx.level != rx.lastLevel ) {
     uint8_t interval = ( rx.time - rx.time0 ) >> clockShift;
@@ -434,12 +434,12 @@ static void rx_start(void) {
   cli();
 
   // Make sure configured as input in case shared with TX
-  GDO0_DDR  &= ~GDO0_IN;
-  GDO0_PORT |=  GDO0_IN;		 // Set input pull-up
+  GDO2_DDR  &= ~GDO2_IN;
+  GDO2_PORT |=  GDO2_IN;		 // Set input pull-up
   
-  EICRA |= ( 1 << GDO0_INT_ISCn0 );   // rising and falling edge
-  EIFR   = GDO0_INT_MASK ;     // Acknowledge any previous edges
-  EIMSK |= GDO0_INT_MASK ;     // Enable interrupts
+  EICRA |= ( 1 << GDO2_INT_ISCn0 );   // rising and falling edge
+  EIFR   = GDO2_INT_MASK ;     // Acknowledge any previous edges
+  EIMSK |= GDO2_INT_MASK ;     // Enable interrupts
   
   // Configure SW interrupt for edge processing
   SW_INT_DDR  |= SW_INT_IN;
@@ -449,8 +449,6 @@ static void rx_start(void) {
   PCICR |= SW_INT_ENBL;	// and enable
   
   SREG = sreg;
-
-  // TODO: put the radio in RX mode
 }
 
 //---------------------------------------------------------------------------------
@@ -459,13 +457,250 @@ static void rx_stop(void) {
   uint8_t sreg = SREG;
   cli();
 
-  EIMSK &= ~GDO0_INT_MASK;                 // Disable interrupts
+  EIMSK &= ~GDO2_INT_MASK;                 // Disable interrupts
   
   SREG = sreg;
   
   // TODO: put the radio in IDLE mode
 }
 
+/***********************************************************************************
+** TX Processing
+*/
+enum tx_states {
+  TX_OFF,
+  TX_IDLE,
+  TX_PREAMBLE,
+  TX_SYNC,
+  TX_MSG,
+  TX_TRAIN,
+  TX_DONE
+};
+
+static uint8_t tx_idle(void);
+static uint8_t tx_preamble(void);
+static uint8_t tx_sync(void);
+static uint8_t tx_msg(void);
+static uint8_t tx_train(void);
+static uint8_t tx_done(void);
+
+static struct tx_state {
+  uint8_t state;
+  uint8_t count;
+  
+  uint8_t byte;
+  uint8_t bit;
+  
+  struct message *msg;
+} tx;
+
+static void tx_reset(void) {
+  memset( &tx, 0, sizeof(tx) );
+}
+
+static void tx_start(void);
+static void tx_stop(void);
+
+static void tx_frame_start(void);
+static void tx_frame_end(void);
+static void tx_frame_done(void);
+
+static void tx_set_byte(uint8_t byte);
+
+/***********************************************************************************
+** FRAME transmission
+**
+** A TX frame consists of 
+**   <PREAMBLE><SYNC WORD><MSG><TRAINING>
+**
+** In each part of the frame apart from MSG the bytes to be transmitted
+** are pre-defined.
+**
+*/
+
+#define TRAIN 0xAA
+#define TX_PREAMBLE_LEN 4
+#define TX_TRAIN_LEN    2
+
+#define SYNC0 0xFF
+#define SYNC1 0x00
+
+static uint8_t tx_idle( void ) {
+  tx.count = 0;
+  
+  if( !tx.msg )
+	return tx_done();
+  else {
+	tx_frame_start();
+    return tx_preamble();
+  }
+}
+
+static uint8_t tx_preamble( void ) {
+  uint8_t state = TX_PREAMBLE;
+  
+  if( tx.count <TX_PREAMBLE_LEN ) {
+	tx_set_byte(TRAIN);
+  } else {
+	tx.count = 0;
+	state = tx_sync();
+  }
+	
+  return state;
+}
+
+static uint8_t tx_sync( void ) {
+  static uint8_t const sync[2] = { SYNC0,SYNC1  };
+  uint8_t state = TX_SYNC;
+  
+  if( tx.count<sizeof(sync) ) {
+	tx_set_byte( sync[tx.count] );
+  } else {
+	tx.count = 0;
+	state = tx_msg();
+  }
+	
+  return state;
+}
+
+static uint8_t tx_msg( void ) {
+  uint8_t state = TX_MSG;
+  uint8_t byte = msg_tx_byte( tx.msg );
+  
+  if( byte ) {
+	tx_set_byte( byte );
+  } else {
+	tx.count = 0;
+	state = tx_train();
+  }
+	
+  return state;
+}
+
+static uint8_t tx_train( void ) {
+  uint8_t state = TX_TRAIN;
+  
+  if( tx.count <TX_TRAIN_LEN ) {
+	tx_set_byte(TRAIN);
+  } else {
+	tx.count = 0;
+    tx_frame_end();
+	state = tx_done();
+  }
+	
+  return state;
+}
+
+static uint8_t tx_done( void ) {
+  return TX_DONE;
+}
+
+/***************************************************************************
+** TX frame processing
+*/
+
+static void tx_frame_start(void) {
+  DEBUG_FRAME(1);
+}
+
+static void tx_frame_end(void) {
+  DEBUG_FRAME(0);
+  tx_stop();
+}
+
+static void tx_frame_done(void) {
+  msg_tx_done( &tx.msg );
+};
+
+#define TX_START_BIT 10
+#define TX_STOP_BIT   1
+
+static void tx_set_byte(uint8_t byte) {
+  tx.byte = byte;
+  tx.bit = TX_START_BIT;
+  tx.count++;
+}
+
+static void tx_bit( uint8_t level ) {
+  if( level ) GDO0_PORT |=  GDO0_IN;
+  else        GDO0_PORT &= ~GDO0_IN;
+}
+
+static void tx_frame(void) {
+  if( tx.state==TX_OFF ) return;
+
+  if( tx.bit == TX_START_BIT ) {
+	tx_bit( 0 );
+  } else if( tx.bit == TX_STOP_BIT ) {
+	tx_bit( 1 );
+  } else {
+	tx_bit( tx.byte & 0x80 );
+	tx.byte <<= 1;
+  }
+  tx.bit--;
+
+  if( tx.bit == 0 ) {	
+    switch( tx.state ) {
+    case TX_IDLE:     tx.state = tx_idle();		break;
+    case TX_PREAMBLE: tx.state = tx_preamble();	break;
+    case TX_SYNC:     tx.state = tx_sync();     break;
+    case TX_MSG:      tx.state = tx_msg();      break;
+    case TX_TRAIN:    tx.state = tx_train();    break;
+    case TX_DONE:     tx.state = tx_done();     break;
+	}
+  }
+}
+
+/***********************************************************************************
+** TX
+** On clock interrupts send the next bit to the radio
+*/
+
+ISR(TIMER0_COMPA_vect) {
+  DEBUG_ISR(1);
+  tx_frame();
+  DEBUG_ISR(0);
+}
+
+static void tx_start(void) {
+  uint8_t sreg = SREG;
+  cli();
+
+  GDO0_PORT |=  GDO0_IN;		 // output high
+  GDO0_DDR  |=  GDO0_IN;
+
+  TIFR0  = 0;
+  TIMSK0 = ( 1<<OCIE0A );
+
+  SREG = sreg;
+}
+
+static void tx_stop(void) {
+  uint8_t sreg = SREG;
+  cli();
+
+  TIMSK0 = ( 0<<OCIE0A );
+
+  SREG = sreg;
+}
+
+// Timer at bitrate interval.
+static void tx_init(void) {
+ uint32_t temp;
+  
+  uint8_t sreg = SREG;
+  cli();
+
+  // Timer/Counter 0 : CTC, no output pins, F_CPU/8
+  TCCR0A = 0x02;
+  TCCR0B = 0x02;
+
+  temp  = F_CPU / 8;  // Pre scaler
+  temp /= BAUD_RATE;  // counts/BIT
+  OCR0A = temp;
+
+  SREG = sreg;
+}
 
 /***************************************************************************
 ** External interface
@@ -481,26 +716,70 @@ void frame_rx_enable(void) {
   SREG = sreg;
     
   rx_start();
-  // TODO: radio to RX mode
+  cc_enter_rx_mode();
 }
 
 void frame_rx_disable(void) {
+  cc_enter_idle_mode();
   rx_stop();
-  // TODO: radio to IDLE mode
+}
+
+void frame_tx_enable(void) {
+  cc_enter_tx_mode();
+  tx.state = TX_IDLE;
+  tx.bit = 1;
+  tx_start();
+}
+
+void frame_tx_disable(void) {
+  tx_stop();
+  cc_enter_idle_mode();
+
+  tx_frame_done();
+  tx_reset();
 }
 
 void frame_init(void) {
   rx_reset();
   rx_init();
+
+  tx_reset();
+  tx_init();
 }
 
+#define RX
+#define TX
+
 void frame_work(void) {
+
   if( rx.state==RX_DONE ) {
 	rx_frame_done();
     frame_rx_enable();
   }
   if( rx.state==RX_OFF ) {
+#ifdef RX
     frame_rx_enable();
+#endif	
   }
+  
+  if( !tx.msg ) {
+	tx.msg = msg_tx_get();
+  } else {  // TX pending
+	// TODO: verify safe to TX
+
+#ifdef TX
+    if( tx.state == TX_OFF  ) { 
+	  frame_rx_disable(); 
+	  frame_tx_enable(); 
+	}
+    if( tx.state == TX_DONE ) { 
+	  frame_tx_disable(); 
+	  rx_reset();
+	}
+#else
+    tx_frame_done();
+#endif
+  }
+  
   
 }
