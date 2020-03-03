@@ -33,7 +33,7 @@
   #define GDO0_PORT       PORTD
   #define GDO0_PIN        PIND
   #define GDO0_IN         ( 1 << PORTD2 )
-#elif( GDO0==INT_1 )
+#elif( GDO0==INT1 )
   #define GDO0_INT_MASK   ( 1 << INT1 )
   #define GDO0_INT_VECT   INT1_vect
   #define GDO0_INT_ISCn0  ISC10
@@ -42,10 +42,12 @@
   #define GDO0_PORT       PORTD
   #define GDO0_PIN        PIND
   #define GDO0_IN         ( 1 << PORTD3 )
+#else
+  #error "GDO0 not mapped"
 #endif
 
 // GDO2 connection
-#if( GDO2==INT_1 )
+#if( GDO2==INT1 )
   #define GDO2_INT_MASK   ( 1 << INT1 )
   #define GDO2_INT_VECT   INT1_vect
   #define GDO2_INT_ISCn0  ISC10
@@ -54,7 +56,7 @@
   #define GDO2_PORT       PORTD
   #define GDO2_PIN        PIND
   #define GDO2_IN         ( 1 << PORTD3 )
-#elif( GDO2==INT_0 )
+#elif( GDO2==INT0 )
   #define GDO2_INT_MASK   ( 1 << INT0 )
   #define GDO2_INT_VECT   INT0_vect
   #define GDO2_INT_ISCn0  ISC00
@@ -63,6 +65,8 @@
   #define GDO2_PORT       PORTD
   #define GDO2_PIN        PIND
   #define GDO2_IN         ( 1 << PORTD2 )
+#else
+  #error "GDO2 not mapped"
 #endif
 
 // Software interrupt
