@@ -27,7 +27,7 @@ void main_init(void) {
   spi_init();
   cc_init();
   frame_init();
-  msg_init();
+  msg_init( 18,0x48DADA );
   
   sei();
 }
