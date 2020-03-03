@@ -12,10 +12,11 @@
 
 #include <stdint.h>
 
-extern uint8_t cc_put_octet( uint8_t octet );
-extern void cc_tx_trigger(void);
-
 extern uint8_t cc_read_rssi(void);
+
+extern void cc_enter_idle_mode(void);
+extern void cc_enter_rx_mode(void);
+extern void cc_enter_tx_mode(void);
 
 extern void cc_init(void);
 extern void cc_work(void);
