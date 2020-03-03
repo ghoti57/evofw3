@@ -80,9 +80,8 @@ static inline uint8_t manchester_decode( uint8_t byte ) {
   return decoded;
 }
 
-static inline void manchester_encode( uint8_t value, uint8_t *byte1, uint8_t *byte2 ) {
-  *byte1 = man_encode[ ( value >> 4 ) & 0xF ];
-  *byte2 = man_encode[ ( value      ) & 0xF ];
+static inline uint8_t manchester_encode( uint8_t value ) {
+  return man_encode[ value & 0xF ];
 }
 
 
@@ -140,12 +139,96 @@ static void msg_reset( struct message *msg ) {
 }
 
 /********************************************************
+** Message structure pool
+********************************************************/
+static struct message *Msg[8];
+static uint8_t msgIn=0;
+static uint8_t msgOut=0;
+
+static void msg_free( struct message **msg ) {
+  if( msg && (*msg) ) {
+    msg_reset( (*msg) );
+
+    Msg[ msgIn ] = (*msg);
+    msgIn = ( msgIn+1 ) % 8;
+	
+	(*msg) = NULL;
+  }
+}
+
+static struct message *msg_alloc(void) {
+  struct message *msg = Msg[ msgOut ];
+  if( msg != NULL ) {
+    Msg[msgOut] = NULL;
+    msgOut = ( msgOut+1 )  % 8;
+  }
+  
+  return msg;
+}
+
+/********************************************************
+** Received Message list
+********************************************************/
+static struct message *MsgRx[8];
+static uint8_t msgRxIn=0;
+static uint8_t msgRxOut=0;
+
+static void msg_rx_ready( struct message **msg ) {
+  if( msg && (*msg) ) {
+    MsgRx[ msgRxIn ] = (*msg);
+    msgRxIn = ( msgRxIn+1 ) % 8;
+	(*msg) = NULL;
+  }
+}
+
+static struct message *msg_rx_get(void) {
+  struct message *msg = MsgRx[ msgRxOut ];
+  if( msg != NULL ) {
+    MsgRx[msgRxOut] = NULL;
+    msgRxOut = ( msgRxOut+1 ) % 8;
+    msg->state = S_SIGNATURE;
+  }
+  
+  return msg;
+}
+
+/********************************************************
+** Transmit Message list
+********************************************************/
+static struct message *MsgTx[8];
+static uint8_t msgTxIn=0;
+static uint8_t msgTxOut=0;
+
+static void msg_tx_ready( struct message **msg ) {
+  if( msg && (*msg) ) {
+    MsgTx[ msgTxIn ] = (*msg);
+    msgTxIn = ( msgTxIn+1 ) % 8;
+	(*msg) = NULL;
+  }
+}
+
+struct message *msg_tx_get(void) {
+  struct message *msg = MsgTx[ msgTxOut ];
+  if( msg != NULL ) {
+    msg->state = S_SIGNATURE;
+    MsgTx[msgTxOut] = NULL;
+    msgTxOut = ( msgTxOut+1 ) % 8;
+  }
+  
+  return msg;
+}
+
+void msg_tx_done( struct message **msg ) {
+  msg_rx_ready( msg );	// Echo what we transmitted
+}
+
+/********************************************************
 ** Message Header
 ********************************************************/
 
 #define F_MASK   0x03
 #define F_RQ     0x00
-#define F_I		0x01
+#define F_I	     0x01
 #define F_W      0x02
 #define F_RP     0x03
 inline uint8_t pkt_type(uint8_t flags) { return flags & F_MASK; }
@@ -209,7 +292,7 @@ inline uint8_t hdr_param0(uint8_t header)    { return header & HDR_PARAM0; }
 inline uint8_t hdr_param1(uint8_t header)    { return header & HDR_PARAM1; }
 
 /********************************************************
-** Message Print
+** Message fields
 ********************************************************/
 static uint8_t msg_print_rssi( char *str, uint8_t rssi, uint8_t valid ) {
   uint8_t n = 0;
@@ -222,16 +305,90 @@ static uint8_t msg_print_rssi( char *str, uint8_t rssi, uint8_t valid ) {
   
   return n;
 }
-		
+
+static uint8_t const signature[] = { 0xCC, 0xAA, 0xCA };
+static uint8_t msg_rx_signature( struct message *msg, uint8_t byte __attribute__ ((unused)) ) {
+  uint8_t state = S_SIGNATURE;
+  
+  // Validate it?
+  msg->count++;
+  if( msg->count==sizeof(signature) ) {
+	 state = S_HEADER;
+	 msg->count = 0;
+  }
+  return state;
+}
+
+static uint8_t msg_tx_signature( struct message *msg ) {
+  uint8_t byte = 0;
+
+  if( msg->count < sizeof(signature) ) {
+    byte = signature[ msg->count ];
+	msg->count++;
+  } else {
+	msg->count = 0;
+  }
+  
+  return byte;
+}
+
+//******************************************************************
+
+static char const * const Type[4] = { "RQ","I","W","RP" };
+
 static uint8_t msg_print_type( char *str, uint8_t type ) {
-  static char const * const Type[4] = { "RQ ", " I "," W ","RP " };
   uint8_t n = 0;
 
-  n = sprintf( str, Type[type] );
+  if( type <= F_RP )
+    n = sprintf( str, "%2s ", Type[type] );
+  else
+    n = sprintf( str, "?? ");
 
   return n;
 }
-	
+
+static void msg_scan_header( struct message *msg, char *str, uint8_t nChar ) {
+  // Cheap conversion to upper for acceptable characters
+  while( --nChar )
+    str[ nChar-1 ] &= ~( 'A'^'a' );  
+
+  for( msg->fields=F_RQ ; msg->fields<=F_RP ; msg->fields++ ) {
+	if( !strcmp( str, Type[msg->fields] ) )
+      break;
+  }
+
+  msg_print_type( str, msg->fields );
+}
+
+static uint8_t msg_rx_header( struct message *msg, uint8_t byte ) {
+  uint8_t state = S_ADDR0;
+
+  msg->fields = get_hdr_flags( byte );
+  if( hdr_param0(byte) ) msg->fields |= F_PARAM0;
+  if( hdr_param1(byte) ) msg->fields |= F_PARAM1;
+
+  return state;
+}
+
+static uint8_t msg_tx_header( struct message *msg ) {
+  uint8_t byte = 0;
+
+  if( msg->count < 2 ) {
+	uint8_t raw = get_header( msg->fields );
+    byte = manchester_encode( ( msg->count & 1 ) ? raw : raw >> 4 );
+	msg->count++;
+  } else {
+	msg->count = 0;
+  }
+  
+  return byte;
+}
+
+//******************************************************************
+
+static uint8_t  myClass = 18;
+static uint32_t myId = 0x4DADA;
+
 static uint8_t msg_print_addr( char *str, uint8_t *addr, uint8_t valid ) {
   uint8_t n = 0;
 
@@ -249,6 +406,64 @@ static uint8_t msg_print_addr( char *str, uint8_t *addr, uint8_t valid ) {
   return n;
 }
 
+static void msg_scan_addr( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+  uint8_t ok = 0;
+  uint8_t addr = msg->state - S_ADDR0;
+  uint8_t class;
+  uint32_t id;
+  
+  if( str[0]!='-' && 2 == sscanf( str, "%hhu:%lu", &class, &id ) ) {
+	// Specific address for thios device
+	if( class==18 && id ==730 ) {
+	  class = myClass;
+	  id = myId;
+	}
+
+	msg->addr[addr][0] = ( class<< 2 ) | ( ( id >> 16 ) & 0x03 );
+	msg->addr[addr][1] =                 ( ( id >>  8 ) & 0xFF );
+	msg->addr[addr][2] =                 ( ( id       ) & 0xFF );
+	
+	msg->fields |= F_ADDR0 << addr;
+	ok = 1;
+	
+	msg->csum += msg->addr[addr][0] + msg->addr[addr][1] + msg->addr[addr][2];
+  }
+
+  msg_print_addr( str, msg->addr[addr], ok );
+}
+
+static uint8_t msg_rx_addr( struct message *msg, uint8_t addr, uint8_t byte ) {
+  uint8_t state = S_ADDR0 + addr;
+
+  msg->addr[addr][msg->count++] = byte;
+  if( msg->count==sizeof( msg->addr[0] ) ) {
+	msg->count = 0;
+	state += 1;
+	msg->rxFields |= F_ADDR0 << addr;
+  }
+
+  return state;
+}
+
+static uint8_t msg_tx_addr( struct message *msg ) {
+  uint8_t byte = 0;
+  uint8_t addr = msg->state - S_ADDR0;
+  
+  if( msg->fields & ( F_ADDR0 << addr ) ) {
+    if( msg->count < 6 ) {
+	  uint8_t raw = msg->addr[ addr ][ msg->count/2 ];
+      byte = manchester_encode( ( msg->count & 1 ) ? raw : raw >> 4 );
+	  msg->count++;
+    } else {
+	  msg->count = 0;
+    }
+  }
+  
+  return byte;
+}
+
+//******************************************************************
+
 static uint8_t msg_print_param( char *str, uint8_t param, uint8_t valid ) {
   uint8_t n = 0;
 
@@ -261,17 +476,102 @@ static uint8_t msg_print_param( char *str, uint8_t param, uint8_t valid ) {
   return n;
 }
 
+static void msg_scan_param( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+  uint8_t ok = 0;
+  uint8_t param = msg->state - S_PARAM0;
+
+  if( str[0]!='-' && 1 == sscanf( str, "%hhu", msg->param+param ) ) {
+	msg->fields |= F_PARAM0 << param;
+	ok = 1;
+	
+    msg->csum += msg->param[param];
+  }
+
+  msg_print_param( str, msg->param[param], ok );
+}
+
+static uint8_t msg_rx_param( struct message *msg, uint8_t param, uint8_t byte ) {
+  uint8_t state = S_PARAM0 + param;
+
+  msg->param[param] = byte;
+  state += 1;
+  msg->rxFields |= F_PARAM0 << param;
+  
+  return state;
+}
+
+static uint8_t msg_tx_param( struct message *msg ) {
+  uint8_t byte = 0;
+  uint8_t param = msg->state - S_PARAM0;
+
+  if( msg->fields & ( F_PARAM0 << param ) ) {
+    if( msg->count < 2 ) {
+	  uint8_t raw = msg->param[ param ];
+      byte = manchester_encode( ( msg->count & 1 ) ? raw : raw >> 4 );
+	  msg->count++;
+    } else {
+	  msg->count = 0;
+    }
+  }
+  
+  return byte;
+}
+
+//******************************************************************
+
 static uint8_t msg_print_opcode( char *str, uint8_t *opcode, uint8_t valid ) {
   uint8_t n = 0;
 
   if( valid ) {
-	n = sprintf( str, "%02x%02x ", opcode[0],opcode[1] );
+	n = sprintf( str, "%02hhX%02hhX ", opcode[0],opcode[1] );
   } else {
 	n= sprintf(str, "???? ");
   }
   
   return n;
 }
+
+static void msg_scan_opcode( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+  uint8_t ok = 0;
+  
+  if( str[0]!='-' && 2 == sscanf( str, "%02hhx%02hhx", msg->opcode+0,msg->opcode+1 )  ) {
+	msg->rxFields |= F_OPCODE;
+	ok = 1;
+	
+    msg->csum += msg->opcode[0] + msg->opcode[1];
+  }
+  
+  msg_print_opcode( str, msg->opcode, ok );
+}
+
+static uint8_t msg_rx_opcode( struct message *msg, uint8_t byte ) {
+  uint8_t state = S_OPCODE;
+
+  msg->opcode[msg->count++] = byte;
+  if( msg->count==sizeof( msg->opcode ) ) {
+	msg->count = 0;
+	state += 1;
+	msg->rxFields |= F_OPCODE ;
+  }
+  
+  return state;
+}
+
+static uint8_t msg_tx_opcode( struct message *msg ) {
+  uint8_t byte = 0;
+
+  if( msg->count < 4 ) {
+	uint8_t raw = msg->opcode[ msg->count/2 ];
+    byte = manchester_encode( ( msg->count & 1 ) ? raw : raw >> 4 );
+	msg->count++;
+  } else {
+	msg->count = 0;
+  }
+  
+  return byte;
+}
+
+//******************************************************************
 
 static uint8_t msg_print_len( char *str, uint8_t len, uint8_t valid ) {
   uint8_t n = 0;
@@ -285,13 +585,152 @@ static uint8_t msg_print_len( char *str, uint8_t len, uint8_t valid ) {
   return n;
 }
 
+static void msg_scan_len( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+  uint8_t ok = 0;
+  
+  if( str[0]!='-' && 1 == sscanf( str, "%hhu", &msg->len ) ) {
+	if( msg->len > 0 && msg->len <= MAX_PAYLOAD )
+	{
+      msg->rxFields |= F_LEN;
+      ok = 1;
+	  
+	  msg->csum += msg->len;
+	}
+  }
+
+  msg_print_len( str, msg->len, ok );
+}
+
+static uint8_t msg_rx_len( struct message *msg, uint8_t byte ) {
+  uint8_t state = S_LEN;
+
+  msg->len = byte;
+  state += 1;
+  msg->rxFields |= F_LEN;
+  
+  return state;
+}
+
+static uint8_t msg_tx_len( struct message *msg ) {
+  uint8_t byte = 0;
+
+  if( msg->count < 2 ) {
+	uint8_t raw = msg->len;
+    byte = manchester_encode( ( msg->count & 1 ) ? raw : raw >> 4 );
+	msg->count++;
+  } else {
+	msg->count = 0;
+  }
+  
+  return byte;
+}
+
+//******************************************************************
+
 static uint8_t msg_print_payload( char *str, uint8_t payload ) {
   uint8_t n=0;
   
-  n = sprintf( str,"%02x",payload ); 
+  n = sprintf( str,"%02X",payload ); 
 
   return n;
 }
+
+static void msg_scan_payload( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+
+  if( 1 == sscanf( str, "%02hhx", msg->payload+msg->nPayload ) )
+  {
+    msg->csum += msg->payload[msg->nPayload];
+    msg_print_payload( str, msg->payload[msg->nPayload] );
+  }
+  else
+    sprintf( str,"??" );
+}
+
+static uint8_t msg_rx_payload( struct message *msg, uint8_t byte ) {
+  uint8_t state = S_PAYLOAD;
+
+  if( msg->nPayload < MAX_PAYLOAD ) {
+	msg->payload[msg->nPayload++] = byte;
+  }
+
+  msg->count++;
+  if( msg->count==msg->len ) {
+	msg->count = 0;
+	state = S_CHECKSUM;
+  }
+  
+  return state;
+}
+
+static uint8_t msg_tx_payload( struct message *msg ) {
+  uint8_t byte = 0;
+
+  if( msg->count < 2*msg->len ) {
+	uint8_t raw = msg->payload[ msg->count/2 ];
+    byte = manchester_encode( ( msg->count & 1 ) ? raw : raw >> 4 );
+	msg->count++;
+  } else {
+	msg->count = 0;
+  }
+  
+  return byte;
+}
+
+//******************************************************************
+
+static uint8_t msg_rx_checksum( struct message *msg, uint8_t byte __attribute__ ((unused)) ) {
+  uint8_t state = S_TRAILER;
+
+  if( msg->csum != 0 && !msg->error )
+	msg->error = MSG_CSUM_ERR;
+
+  return state;
+}
+
+static uint8_t msg_tx_checksum( struct message *msg ) {
+  uint8_t byte = 0;
+
+  if( msg->count < 2 ) {
+	uint8_t raw = msg->csum;
+    byte = manchester_encode( ( msg->count & 1 ) ? raw : raw >> 4 );
+	msg->count++;
+  } else {
+	msg->count = 0;
+  }
+  
+  return byte;
+}
+
+//******************************************************************
+
+static uint8_t trailer[] = { 0xAC };
+static uint8_t msg_rx_trailer( struct message *msg, uint8_t byte __attribute__ ((unused)) ) {
+  uint8_t state = S_TRAILER;
+  
+  // Validate it?
+  msg->count++;
+  if( msg->count==sizeof(trailer) ) {
+	 state = S_COMPLETE;
+	 msg->count = 0;
+  }
+  
+  return state;
+}
+
+static uint8_t msg_tx_trailer( struct message *msg ) {
+  uint8_t byte = 0;
+
+  if( msg->count < sizeof(trailer) ) {
+    byte = trailer[ msg->count ];
+	msg->count++;
+  } else {
+	msg->count = 0;
+  }
+  
+  return byte;
+}
+
+//******************************************************************
 
 static uint8_t msg_print_error( char *str, uint8_t error ) {
 #define _MSG_ERR(_e,_t) , _t
@@ -306,6 +745,8 @@ static uint8_t msg_print_error( char *str, uint8_t error ) {
 	  
   return n;
 }
+
+//******************************************************************
 
 static uint8_t msg_print_raw( char *str, uint8_t raw ) {
   uint8_t n = 0;
@@ -462,165 +903,8 @@ static uint8_t msg_print( struct message *msg ) {
 }
 
 /********************************************************
-** Message structure pool
-********************************************************/
-static struct message *Msg[8];
-static uint8_t msgIn=0;
-static uint8_t msgOut=0;
-
-static void msg_free( struct message *msg ) {
-  if( msg != NULL ) {
-    msg_reset( msg );
-
-    Msg[ msgIn ] = msg;
-    msgIn = ( msgIn+1 ) % 8;
-  }
-}
-
-static struct message *msg_alloc(void) {
-  struct message *msg = Msg[ msgOut ];
-  if( msg != NULL ) {
-    Msg[msgOut] = NULL;
-    msgOut = ( msgOut+1 )  % 8;
-  }
-  
-  return msg;
-}
-
-/********************************************************
-** Received Message list
-********************************************************/
-static struct message *MsgRx[8];
-static uint8_t msgRxIn=0;
-static uint8_t msgRxOut=0;
-
-static void msg_ready( struct message *msg ) {
-  if( msg != NULL ) {
-    MsgRx[ msgRxIn ] = msg;
-    msgRxIn = ( msgRxIn+1 ) % 8;
-  }
-}
-
-static struct message *msg_get(void) {
-  struct message *msg = MsgRx[ msgRxOut ];
-  if( msg != NULL ) {
-    MsgRx[msgRxOut] = NULL;
-    msgRxOut = ( msgRxOut+1 ) % 8;
-  }
-  
-  return msg;
-}
-
-/********************************************************
 ** RX Message processing
 ********************************************************/
-static uint8_t msg_rx_signature( struct message *msg, uint8_t byte ) {
-  static uint8_t const signature[] = { 0xCC, 0xAA, 0xCA };
-  uint8_t state = S_SIGNATURE;
-  
-  // Validate it?
-  msg->count++;
-  if( msg->count==sizeof(signature) ) {
-	 state = S_HEADER;
-	 msg->count = 0;
-  }
-  return state;
-}
-
-static uint8_t msg_rx_header( struct message *msg, uint8_t byte ) {
-  uint8_t state = S_ADDR0;
-
-  msg->fields = get_hdr_flags( byte );
-  if( hdr_param0(byte) ) msg->fields |= F_PARAM0;
-  if( hdr_param1(byte) ) msg->fields |= F_PARAM1;
-
-  return state;
-}
-
-static uint8_t msg_rx_addr( struct message *msg, uint8_t addr, uint8_t byte ) {
-  uint8_t state = S_ADDR0 + addr;
-
-  msg->addr[addr][msg->count++] = byte;
-  if( msg->count==sizeof( msg->addr[0] ) ) {
-	msg->count = 0;
-	state += 1;
-	msg->rxFields |= F_ADDR0 << addr;
-  }
-
-  return state;
-}
-
-static uint8_t msg_rx_param( struct message *msg, uint8_t param, uint8_t byte ) {
-  uint8_t state = S_PARAM0 + param;
-
-  msg->param[param] = byte;
-  state += 1;
-  msg->rxFields |= F_PARAM0 << param;
-  
-  return state;
-}
-
-static uint8_t msg_rx_opcode( struct message *msg, uint8_t byte ) {
-  uint8_t state = S_OPCODE;
-
-  msg->opcode[msg->count++] = byte;
-  if( msg->count==sizeof( msg->opcode ) ) {
-	msg->count = 0;
-	state += 1;
-	msg->rxFields |= F_OPCODE ;
-  }
-  
-  return state;
-}
-
-static uint8_t msg_rx_len( struct message *msg, uint8_t byte ) {
-  uint8_t state = S_LEN;
-
-  msg->len = byte;
-  state += 1;
-  msg->rxFields |= F_LEN;
-  
-  return state;
-}
-
-static uint8_t msg_rx_payload( struct message *msg, uint8_t byte ) {
-  uint8_t state = S_PAYLOAD;
-
-  if( msg->nPayload < MAX_PAYLOAD ) {
-	msg->payload[msg->nPayload++] = byte;
-  }
-
-  msg->count++;
-  if( msg->count==msg->len ) {
-	msg->count = 0;
-	state = S_CHECKSUM;
-  }
-  
-  return state;
-}
-
-static uint8_t msg_rx_checksum( struct message *msg, uint8_t byte ) {
-  uint8_t state = S_TRAILER;
-
-  if( msg->csum != 0 && !msg->error )
-	msg->error = MSG_CSUM_ERR;
-
-  return state;
-}
-
-static uint8_t msg_rx_trailer( struct message *msg, uint8_t byte ) {
-  static uint8_t trailer[] = { 0xAC };
-  uint8_t state = S_TRAILER;
-  
-  // Validate it?
-  msg->count++;
-  if( msg->count==sizeof(trailer) ) {
-	 state = S_COMPLETE;
-	 msg->count = 0;
-  }
-  
-  return state;
-}
 
 static struct message *msgRx;
 static void msg_rx_process(uint8_t byte) {
@@ -673,8 +957,7 @@ static void msg_rx_end(void) {
     msgRx->error = MSG_TRUNC_ERR;
   }
 
-  msg_ready( msgRx );
-  msgRx = NULL;
+  msg_rx_ready( &msgRx );
 }
 
 
@@ -694,6 +977,151 @@ void msg_rx_byte( uint8_t byte ) {
   DEBUG_MSG(0);
 }
 
+/********************************************************
+** TX Message processing
+********************************************************/
+
+static uint8_t msg_scan( struct message *msg, uint8_t byte) {
+  static char str[17];
+  static uint8_t nChar;
+  
+  if( byte=='\r' || byte=='\n' ) {
+	// Ignore blank line
+    if( msg->state==S_SIGNATURE && nChar==0 )
+      return 0;
+	
+	// Didn't get a sensible message
+    if( msg->state != S_CHECKSUM ) {
+	  nChar = 0;
+      msg_reset( msg ); // Discard
+      return 0;
+	} else {
+      byte = '\0';
+	}
+  }
+  
+  // Discard to end of line
+  if( msg->state == S_ERROR ) 
+	return 0;
+
+  if( byte==' ' ) {
+    // Discard leading spaces
+	if( nChar==0 )
+	  return 0;
+  
+    // Terminate field
+	byte = '\0';
+  }
+  str[ nChar++ ] = (char)byte;
+
+  // No spaces between PAYLOAD bytes
+  if( byte && msg->state == S_PAYLOAD ) {
+    if( nChar==2 ) {
+      str[nChar++] = '\0';
+
+      msg_scan_payload( msg, str, nChar );
+      msg->nPayload++;
+      nChar = 0;
+
+      if( msg->nPayload == msg->len )
+        msg->state = S_CHECKSUM;
+    } else { // wait for second byte
+	  return 0;
+	}
+  }
+
+  if( !byte ) {
+    switch( msg->state ) {
+    case S_SIGNATURE:	/* fall through */
+	case S_HEADER:      msg_scan_header( msg, str, nChar );	msg->state = S_PARAM0;   break;
+	case S_ADDR0:       msg_scan_addr( msg, str, nChar );   msg->state = S_ADDR1;    break;
+	case S_ADDR1:       msg_scan_addr( msg, str, nChar );   msg->state = S_ADDR2;    break;
+	case S_ADDR2:       msg_scan_addr( msg, str, nChar );   msg->state = S_OPCODE;   break;
+    case S_PARAM0:      msg_scan_param( msg, str, nChar );  msg->state = S_ADDR0;    break;
+//    case S_PARAM1:
+    case S_OPCODE:      msg_scan_opcode( msg, str, nChar ); msg->state = S_LEN;      break;
+    case S_LEN:         msg_scan_len( msg, str, nChar );    msg->state = S_PAYLOAD;  break;
+    case S_PAYLOAD:                                         msg->state = S_ERROR;    break;
+    case S_CHECKSUM:    msg->state = ( nChar>1 ) ? S_ERROR : S_COMPLETE;             break;
+//  case S_TRAILER:
+//  case S_COMPLETE:
+//  case S_ERROR:
+    } 
+	nChar = 0;
+  }
+
+  if( msg->state==S_PAYLOAD ) {
+	if( ( msg->rxFields & F_MAND ) != F_MAND ) {
+	  msg->state = S_ERROR;
+	}
+  }
+
+  if( msg->state==S_COMPLETE ) {
+    msg->csum += get_header(msg->fields);
+	msg->csum = -msg->csum;
+	msg->rxFields |= msg->fields;
+	return 1;
+  }
+  
+  return 0;
+}
+
+static uint8_t msg_tx_process( struct message *msg ) {
+  uint8_t byte = 0;
+  
+  switch( msg->state ) {
+  case S_SIGNATURE:	 byte = msg_tx_signature(msg); if( byte )break; msg->state = S_HEADER;   /* fall through */
+  case S_HEADER:     byte = msg_tx_header(msg);    if( byte )break; msg->state = S_ADDR0;    /* fall through */
+  case S_ADDR0:      byte = msg_tx_addr(msg);      if( byte )break; msg->state = S_ADDR1;    /* fall through */
+  case S_ADDR1:      byte = msg_tx_addr(msg);      if( byte )break; msg->state = S_ADDR2;    /* fall through */
+  case S_ADDR2:      byte = msg_tx_addr(msg);      if( byte )break; msg->state = S_PARAM0;   /* fall through */
+  case S_PARAM0:     byte = msg_tx_param(msg);     if( byte )break; msg->state = S_PARAM1;   /* fall through */
+  case S_PARAM1:     byte = msg_tx_param(msg);     if( byte )break; msg->state = S_OPCODE;   /* fall through */
+  case S_OPCODE:     byte = msg_tx_opcode(msg);    if( byte )break; msg->state = S_LEN;      /* fall through */
+  case S_LEN:        byte = msg_tx_len(msg);       if( byte )break; msg->state = S_PAYLOAD;  /* fall through */
+  case S_PAYLOAD:    byte = msg_tx_payload(msg);   if( byte )break; msg->state = S_CHECKSUM; /* fall through */
+  case S_CHECKSUM:   byte = msg_tx_checksum(msg);  if( byte )break; msg->state = S_TRAILER;  /* fall through */
+  case S_TRAILER:    byte = msg_tx_trailer(msg);   if( byte )break; msg->state = S_COMPLETE; /* fall through */
+  case S_COMPLETE:
+  case S_ERROR:
+    break;
+  }
+  
+  return byte;
+}
+
+
+uint8_t msg_tx_byte( struct message *msg ) {
+  uint8_t byte = 0;
+  
+  if( msg ) {
+	byte = msg_tx_process( msg );
+  }
+  
+  return byte;
+}
+
+static uint8_t msg_tx_raw( struct message *msg ) {
+  static uint8_t n = 0, n1=0;
+  static char buff[4];
+
+  if( n )
+	n -= tty_put_str( (uint8_t *)buff, n );
+
+  if( !(n+n1) ) {
+    uint8_t byte = msg_tx_byte( msg );
+	if( byte )
+      n = msg_print_raw( buff, byte );
+    else
+	  n1 = sprintf( buff, "\r\n" );
+  }
+
+  if( n1 )
+	n1 -= tty_put_str( (uint8_t *)buff, n1 );
+  
+  return n+n1;
+}
+	  
 /************************************************************************************
 ** 
 ** msg_work must not block in any of it's activities
@@ -705,21 +1133,38 @@ void msg_rx_byte( uint8_t byte ) {
 
 void msg_work(void) {
   static struct message *rx = NULL;
+  static struct message *tx = NULL;
+  static struct message *txMsg = NULL;
   
-  // Print RX messages 
+  // Print messages 
   if( rx ) {
-    if( !msg_print( rx ) ) { 
-      msg_free( rx );
-	  rx = NULL;
+    if( !msg_print( rx ) ) {
+      msg_free( &rx );
+	}
+  } else if( txMsg ) {
+    if( !msg_tx_raw( txMsg ) ) {
+	  msg_tx_ready( &txMsg );
 	}
   } else {
-	rx = msg_get();
-	// If we have a message now we'll start printing it next time
-	if( rx ) {
-      rx->state = S_SIGNATURE;
-    }
+	// If we get a message now we'll start printing it next time
+	rx = msg_rx_get();
   }
   
+  // Scan TX messages
+  if( !tx ) {
+    tx = msg_alloc();
+  }
+  
+  if( tx ) {
+    uint8_t byte = tty_rx_get();
+    if( byte ) {
+      if( msg_scan( tx, byte ) ) {
+//		tx->state = S_SIGNATURE;  txMsg = tx;  tx = NULL;
+		msg_tx_ready( &tx );
+	  }
+	}
+  }
+
 }
 
 /********************************************************
@@ -729,12 +1174,17 @@ void msg_work(void) {
 static void msg_create_pool(void) {
   static struct message MSG[4];
   uint8_t i;
-  for( i=0 ; i< 4; i++ )
-   msg_free( MSG+i );
+  for( i=0 ; i< 4; i++ ) {
+	struct message *msg = MSG+i;
+    msg_free( &msg );
+  }
 }
 
-void msg_init(void) {
+void msg_init( uint8_t class, uint32_t id ) {
   msg_create_pool();
+
+  myClass = class;
+  myId = id;
 }
 
 
