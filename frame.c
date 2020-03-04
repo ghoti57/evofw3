@@ -215,7 +215,11 @@ static uint8_t rx_stop_bit( uint8_t interval ) {
 
 static void rx_frame_start(void) {
   DEBUG_FRAME(1);
+#ifdef LOG_TIME
+  msg_rx_byte(MSG_START,0);
+#else
   msg_rx_byte(MSG_START);
+#endif
 }
 
 static void rx_frame_end(void) {
@@ -226,7 +230,11 @@ static void rx_frame_end(void) {
 static void rx_frame_done(void) {
   uint8_t rssi = cc_read_rssi();
   msg_rx_rssi( rssi );
+#ifdef LOG_TIME
+  msg_rx_byte(MSG_END,0);
+#else
   msg_rx_byte(MSG_END);
+#endif
 };
 
 // Callback from edge processing
@@ -423,7 +431,11 @@ ISR(SW_INT_VECT) {
   rx.lastByte = rx_process_edges( rx.Edges[1-rx.idx], rx.NEdges[1-rx.idx] );
   
   // And pass it on to message to process
+#ifdef LOG_TIME
+  msg_rx_byte( rx.lastByte, rx.Edges[1-rx.idx][ rx.NEdges[1-rx.idx]-1 ] );
+#else
   msg_rx_byte( rx.lastByte );
+#endif
 }
 
 

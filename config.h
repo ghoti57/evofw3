@@ -13,6 +13,8 @@
 #  error "No hardware target defined"
 #endif
 
+#define LOG_TIME
+
 #if defined(DEBUG_PORT)
 
 #define DEBUG_MASK   ( DEBUG_PIN1 | DEBUG_PIN2 | DEBUG_PIN3 | DEBUG_PIN4 )

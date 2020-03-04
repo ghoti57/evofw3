@@ -303,7 +303,10 @@ static void msg_print( struct message *msg ) {
   
   tty_write_str("\r\n");
   
-  if( msg->error ) msg_print_raw( msg->raw, msg->nBytes );
+#ifndef LOG_TIME
+  if( msg->error )
+#endif
+    msg_print_raw( msg->raw, msg->nBytes );
 }
 
 /********************************************************
@@ -485,8 +488,13 @@ static uint8_t msg_rx_trailer( struct message *msg, uint8_t byte ) {
 }
 
 static struct message *msgRx;
+#ifdef LOG_TIME
+static void msg_rx_process(uint8_t byte, uint8_t time) {
+  msgRx->raw[msgRx->nBytes] = time;
+#else
 static void msg_rx_process(uint8_t byte) {
   msgRx->raw[msgRx->nBytes] = byte;
+#endif
   msgRx->nBytes++;
   
   if( msgRx->state == S_SIGNATURE ) 
@@ -540,7 +548,11 @@ static void msg_rx_end(void) {
 }
 
 
+#ifdef LOG_TIME
+void msg_rx_byte( uint8_t byte, uint8_t time ) {
+#else
 void msg_rx_byte( uint8_t byte ) {
+#endif
   DEBUG_MSG(1);
 
   if( byte==MSG_START ) {
@@ -549,7 +561,11 @@ void msg_rx_byte( uint8_t byte ) {
 	if( byte==MSG_END ) {
 	  msg_rx_end();
 	} else {
+#ifdef LOG_TIME
+      msg_rx_process( byte, time );
+#else
       msg_rx_process( byte );
+#endif
 	}
   }
 

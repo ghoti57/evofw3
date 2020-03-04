@@ -12,7 +12,11 @@ enum message_flags {
   MSG_END
 };
 
+#ifdef LOG_TIME
+extern void msg_rx_byte(uint8_t byte, uint8_t time);
+#else
 extern void msg_rx_byte(uint8_t byte);
+#endif
 extern void msg_rx_rssi( uint8_t rssi );
 
 extern void msg_init(void);
