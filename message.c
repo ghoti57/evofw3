@@ -280,11 +280,25 @@ static void msg_print_error( uint8_t error ) {
 }
 
 static void msg_print_raw( uint8_t *raw, uint8_t nBytes ) {
+#ifdef LOG_TIME
+  uint16_t total = 0;
+  uint8_t min=255, max=0, n=nBytes;
+  char str[16];
+#endif
   while( nBytes ) { 
 	tty_write_hex( *raw );tty_write_char('.');
+#ifdef LOG_TIME
+    if(*raw<min) min = *raw;
+	if(*raw>max) max = *raw;
+    total += *raw;
+#endif
 	raw++;
 	nBytes--;
   }
+#ifdef LOG_TIME
+    sprintf(str, "(%02x:%02x:%02x.%02x)", min,max,total/n,total%n );
+    tty_write_str(str);
+#endif
   tty_write_str("\r\n");
 }
 
