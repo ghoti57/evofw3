@@ -228,10 +228,15 @@ static void rx_frame_end(void) {
 }
 
 static void rx_frame_done(void) {
+#ifdef LOG_TIME
+  uint8_t i;
+#endif
   uint8_t rssi = cc_read_rssi();
   msg_rx_rssi( rssi );
 #ifdef LOG_TIME
-  msg_rx_byte(MSG_END,rx.Edges[1-rx.idx][ rx.NEdges[1-rx.idx]-1 ]);
+  for( i=0; i<rx.NEdges[1-rx.idx]-1 ; i++ )
+    msg_rx_byte(0,rx.Edges[1-rx.idx][i]);
+  msg_rx_byte(MSG_END,rx.Edges[1-rx.idx][rx.NEdges[1-rx.idx]-1]);
 #else
   msg_rx_byte(MSG_END);
 #endif
