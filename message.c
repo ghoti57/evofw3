@@ -515,7 +515,7 @@ static void msg_rx_process(uint8_t byte) {
 	msgRx->state = msg_rx_signature( msgRx, byte );
   else if( msgRx->state == S_TRAILER ) 
 	msgRx->state = msg_rx_trailer( msgRx, byte );
-  else if( msgRx->state != S_TRAILER ) {
+  else if( msgRx->state < S_TRAILER ) {
 	// Bytes here come in Manchester code pairs
 	if( !manchester_code_valid(byte) ) msgRx->error = MSG_MANC_ERR;
     msgRx->decoded |= manchester_decode(byte);
@@ -573,6 +573,9 @@ void msg_rx_byte( uint8_t byte ) {
     msg_rx_start();
   }	else if( msgRx ) {
 	if( byte==MSG_END ) {
+#ifdef LOG_TIME
+      msg_rx_process( byte, time );
+#endif
 	  msg_rx_end();
 	} else {
 #ifdef LOG_TIME

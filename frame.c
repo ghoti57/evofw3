@@ -231,7 +231,7 @@ static void rx_frame_done(void) {
   uint8_t rssi = cc_read_rssi();
   msg_rx_rssi( rssi );
 #ifdef LOG_TIME
-  msg_rx_byte(MSG_END,0);
+  msg_rx_byte(MSG_END,rx.Edges[1-rx.idx][ rx.NEdges[1-rx.idx]-1 ]);
 #else
   msg_rx_byte(MSG_END);
 #endif
@@ -265,10 +265,16 @@ static uint8_t rx_frame(uint8_t interval) {
 	    rx_byte();
 		state = RX_FRAME0;
 	  } else { // Lost BYTE synch 
+#ifdef LOG_TIME
+        rx_byte();
+#endif
         rx_frame_end();
         state = RX_DONE;
 	  }
     } else { // lost BYTE synch
+#ifdef LOG_TIME
+        rx_byte();
+#endif
       rx_frame_end();
       state = RX_DONE;
     }
