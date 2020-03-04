@@ -27,7 +27,7 @@
 #define BAUD_RATE 38400
 
 #define ONE_BIT  13
-#define HALF_BIT 6
+#define HALF_BIT 7
 #define BIT_TOL  4
 
 #define MIN_BIT  ( ONE_BIT - BIT_TOL )
