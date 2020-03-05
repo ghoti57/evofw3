@@ -262,7 +262,6 @@ static void msg_print_payload( uint8_t *payload, uint8_t valid ) {
 	payload++;
 	valid--;
   }
-  tty_write_char(' ');
 }
 
 static void msg_print_error( uint8_t error ) {
