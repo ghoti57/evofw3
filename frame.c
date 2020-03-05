@@ -27,7 +27,7 @@
 #define BAUD_RATE 38400
 
 #define ONE_BIT  13
-#define HALF_BIT 6
+#define HALF_BIT 7
 #define BIT_TOL  4
 
 #define MIN_BIT  ( ONE_BIT - BIT_TOL )
@@ -40,7 +40,7 @@
 #define TEN_BITS		( 10 * ONE_BIT )
 #define TEN_BITS_MIN	( TEN_BITS - HALF_BIT )
 #define TEN_BITS_MAX	( TEN_BITS + HALF_BIT )
-#define STOP_BITS_MAX   ( 12 * ONE_BIT + HALF_BIT )
+#define STOP_BITS_MAX   ( 14 * ONE_BIT + HALF_BIT )
 
 /***********************************************************************************
 ** RX Frame state machine
