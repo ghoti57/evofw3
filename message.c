@@ -105,6 +105,24 @@ enum message_state {
   S_ERROR
 };
 
+#define F_MASK   0x03
+#define F_RQ     0x00
+#define F_I	     0x01
+#define F_W      0x02
+#define F_RP     0x03
+
+#define F_ADDR0  0x10
+#define F_ADDR1  0x20
+#define F_ADDR2  0x40
+
+#define F_PARAM0 0x04
+#define F_PARAM1 0x08
+#define F_RSSI   0x80
+
+// Only used for received fields
+#define F_OPCODE 0x01
+#define F_LEN    0x02
+
 #define MAX_PAYLOAD 64
 struct message {
   uint8_t state;
@@ -219,35 +237,23 @@ struct message *msg_tx_get(void) {
 }
 
 void msg_tx_done( struct message **msg ) {
-  msg_rx_ready( msg );	// Echo what we transmitted
+  // Make sure there's an RSSI value to print
+  (*msg)->rxFields |= F_RSSI;
+  (*msg)->rssi = 0;
+
+  // Echo what we transmitted
+  msg_rx_ready( msg );	
 }
 
 /********************************************************
 ** Message Header
 ********************************************************/
 
-#define F_MASK   0x03
-#define F_RQ     0x00
-#define F_I	     0x01
-#define F_W      0x02
-#define F_RP     0x03
 inline uint8_t pkt_type(uint8_t flags) { return flags & F_MASK; }
 inline void set_request(uint8_t *flags)     { *flags = F_RQ; }
 inline void set_information(uint8_t *flags) { *flags = F_I; }
 inline void set_write(uint8_t *flags)       { *flags = F_W; }
 inline void set_response(uint8_t *flags)    { *flags = F_RP; }
-
-#define F_ADDR0  0x10
-#define F_ADDR1  0x20
-#define F_ADDR2  0x40
-
-#define F_PARAM0 0x04
-#define F_PARAM1 0x08
-#define F_RSSI   0x80
-
-// Only used for received fields
-#define F_OPCODE 0x01
-#define F_LEN    0x02
 
 #define F_OPTION ( F_ADDR0 + F_ADDR1 + F_ADDR2 + F_PARAM0 + F_PARAM1 )
 #define F_MAND   ( F_OPCODE + F_LEN )
