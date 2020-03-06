@@ -23,7 +23,7 @@
 // CC1101 register settings
 static const uint8_t PROGMEM CC_REGISTER_VALUES[] = {
 
-  CC1100_IOCFG2, 0x0D, //0x00,  // GDO2- FIFO interrupt
+  CC1100_IOCFG2, 0x2E, //0x00,  // GDO2- FIFO interrupt
   CC1100_IOCFG1, 0x2E,  // GDO1- not used
   CC1100_IOCFG0, 0x2E,  // GDO0- Frame interrupt
   
@@ -39,7 +39,7 @@ static const uint8_t PROGMEM CC_REGISTER_VALUES[] = {
   CC1100_MDMCFG4, 0x6A,  //
   CC1100_MDMCFG3, 0x83,  // (DRATE_M=131 data rate=38,383.4838867Hz)
   CC1100_MDMCFG2, 0x10,  // (GFSK  15/16 Sync Word Carrier sense above threshold)
-  CC1100_MDMCFG1, 0x22,  // (CHANSPC_E=2 NUM_PREAMBLE=4 FEC_EN=0)
+  CC1100_MDMCFG1, 0x02,  // (CHANSPC_E=2 NUM_PREAMBLE=4 FEC_EN=0)
 //  CC1100_MDMCFG0, 0xF8,  //
   CC1100_DEVIATN, 0x50,  //
 
@@ -108,6 +108,8 @@ void cc_enter_rx_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 
   while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
+  cc_write( CC1100_IOCFG2,   0x0D );
+  cc_write( CC1100_PKTCTRL0, 0x32 );
   spi_strobe( CC1100_SFRX );
   while ( CC_STATE( spi_strobe( CC1100_SRX ) ) != CC_STATE_RX );
 
@@ -118,6 +120,8 @@ void cc_enter_tx_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 
   while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
+  cc_write( CC1100_IOCFG2,   0x0B );
+  cc_write( CC1100_PKTCTRL0, 0x12 );
   spi_strobe( CC1100_SFSTXON );
   while ( CC_STATE( spi_strobe( CC1100_STX ) ) != CC_STATE_TX );
 
