@@ -229,11 +229,6 @@ static void rx_frame_done(void) {
   msg_rx_byte(MSG_END);
 };
 
-// Callback from edge processing
-void msg_last_byte(uint8_t byte) {
-  rx.lastByte = byte;
-}
-
 static void rx_byte(void) {
   rx.nByte++;
   
