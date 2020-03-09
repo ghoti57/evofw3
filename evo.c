@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 
@@ -15,6 +17,7 @@
 
 void main_init(void) {
   char buff[24];
+  uint8_t nChar;
 
   // OSCCAL=((uint32_t)OSCCAL * 10368) / 10000;
 
@@ -35,8 +38,8 @@ void main_init(void) {
   
   sei();
   
-  sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
-  tty_write_str(buff); 
+  nChar = sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
+  tty_put_str(buff,nChar); 
 }
 
 void main_work(void) {
