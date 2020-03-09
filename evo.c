@@ -11,7 +11,11 @@
 #include "message.h"
 #include "tty.h"
 
+#include "version.h"
+
 void main_init(void) {
+  char buff[24];
+
   // OSCCAL=((uint32_t)OSCCAL * 10368) / 10000;
 
 #if defined(DEBUG_PORT)
@@ -30,6 +34,9 @@ void main_init(void) {
   msg_init( 18,0x48DADA );
   
   sei();
+  
+  sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
+  tty_write_str(buff); 
 }
 
 void main_work(void) {

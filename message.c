@@ -973,11 +973,15 @@ void msg_rx_byte( uint8_t byte ) {
   if( byte==MSG_START ) {
     msg_rx_start();
   }	else if( msgRx ) {
-	if( byte==MSG_END ) {
+    if( byte==MSG_END ) {
+      msg_rx_end();
+    } else if( byte==0x00 ) {
+      msg_rx_rssi(0);
 	  msg_rx_end();
-	} else {
+      msg_rx_start();
+    } else {
       msg_rx_process( byte );
-	}
+    }
   }
 
   DEBUG_MSG(0);
