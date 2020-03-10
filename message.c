@@ -279,6 +279,7 @@ static void msg_print_error( uint8_t error ) {
 }
 
 static void msg_print_raw( uint8_t *raw, uint8_t nBytes ) {
+  tty_write_str("# ");
   while( nBytes ) { 
 	tty_write_hex( *raw );tty_write_char('.');
 	raw++;
