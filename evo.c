@@ -17,8 +17,7 @@
 
 void main_init(void) {
   char buff[24];
-  uint8_t nChar;
-
+  
   // OSCCAL=((uint32_t)OSCCAL * 10368) / 10000;
 
 #if defined(DEBUG_PORT)
@@ -28,18 +27,18 @@ void main_init(void) {
 
   wdt_disable();
   led_init();
-  tty_init();
+  tty_init(0);
 
   // Wire up components
   spi_init();
   cc_init();
   frame_init();
-  msg_init( 18,0x48DADA );
-
+  msg_init();
+  
   sei();
-
-  nChar = sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
-  tty_put_str(buff,nChar); 
+  
+  sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
+  tty_write_str(buff); 
 }
 
 void main_work(void) {
