@@ -1,21 +1,23 @@
+#include <stdio.h>
+
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 
 #include "config.h"
-#include "tty.h"
 #include "led.h"
 
 #include "spi.h"
 #include "cc1101.h"
-#include "ringbuf.h"
 
 #include "frame.h"
 #include "message.h"
+#include "tty.h"
 
 #include "version.h"
 
 void main_init(void) {
   char buff[24];
+  uint8_t nChar;
 
   // OSCCAL=((uint32_t)OSCCAL * 10368) / 10000;
 
@@ -26,23 +28,24 @@ void main_init(void) {
 
   wdt_disable();
   led_init();
-  tty_init(0);
+  tty_init();
 
   // Wire up components
   spi_init();
   cc_init();
   frame_init();
-  msg_init();
-  
+  msg_init( 18,0x48DADA );
+
   sei();
-  
-  sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
-  tty_write_str(buff); 
+
+  nChar = sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
+  tty_put_str(buff,nChar); 
 }
 
 void main_work(void) {
   frame_work();
   msg_work();
+  tty_work();
 }
 
 #ifdef NEEDS_MAIN
