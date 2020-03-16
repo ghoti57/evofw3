@@ -354,15 +354,17 @@ static uint8_t msg_print_type( char *str, uint8_t type ) {
 }
 
 static void msg_scan_header( struct message *msg, char *str, uint8_t nChar ) {
+  uint8_t msgType;
   // Cheap conversion to upper for acceptable characters
   while( --nChar )
-    str[ nChar-1 ] &= ~( 'A'^'a' );  
+    str[ nChar-1 ] &= ~( 'A'^'a' );
 
-  for( msg->fields=F_RQ ; msg->fields<=F_RP ; msg->fields++ ) {
-	if( !strcmp( str, Type[msg->fields] ) )
+  for( msgType=F_RQ ; msgType<=F_RP ; msgType++ ) {
+    if( !strcmp( str, Type[msgType] ) ) {
+      msg->fields = msgType << 2;
       break;
+    }
   }
-
   msg_print_type( str, msg->fields );
 }
 
