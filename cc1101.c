@@ -31,7 +31,7 @@ static const uint8_t PROGMEM CC_REGISTER_VALUES[] = {
   CC1100_PKTCTRL1, 0x00, //
   CC1100_PKTCTRL0, 0x32, // 0x02, //
 
-  CC1100_FSCTRL1, 0x0F,  //
+  CC1100_FSCTRL1, 0x06,  //
   CC1100_FREQ2,   0x21,  //
   CC1100_FREQ1,   0x65,  //
   CC1100_FREQ0,   0x6C,  //
