@@ -37,7 +37,7 @@ void main_init(void) {
   
   sei();
   
-  sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
+  sprintf( buff, "# %s %d.%d.%02d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
   tty_write_str(buff); 
 }
 
