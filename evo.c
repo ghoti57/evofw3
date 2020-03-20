@@ -38,8 +38,8 @@ void main_init(void) {
   
   sei();
   
-  nChar = sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
-  tty_put_str(buff,nChar); 
+  nChar = sprintf( buff, "# %s %d.%d.%02d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
+  tty_put_str( (uint8_t *)buff,nChar); 
 }
 
 void main_work(void) {

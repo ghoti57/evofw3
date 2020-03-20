@@ -178,7 +178,6 @@ static uint8_t rx_sync1( uint8_t interval ) {
   uint8_t state = RX_SYNC1;     // Stay here until we see a HIGH
 
   if( rx.level ) {  // rising edge
-
     // NOTE: we're accepting 9 or 10 bits here because of observed behaviour
     if( interval >= NINE_BITS_MIN && interval <= TEN_BITS_MAX )
       state = RX_STOP;  // Now we just need the STOP bit for BYTE synch
@@ -381,10 +380,10 @@ static uint8_t rx_process_edges( uint8_t *edges, uint8_t nEdges ) {
 
         // BIT complete?
         if( rx_t==rx_tBit ) {
-          if( rx_tBit == ONE_BIT ) { // START BIT
-          }
-          else if( rx_tBit < TEN_BITS ) {
-            uint8_t bit = ( rx_hi > HALF_BIT );
+		  if( rx_tBit == ONE_BIT ) { // START BIT
+		  }
+          else if( rx_tBit < TEN_BITS ) {  
+            uint8_t bit = ( rx_hi >= HALF_BIT );
             rx_byte <<= 1;
             rx_byte  |= bit;
           }

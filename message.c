@@ -755,11 +755,11 @@ static uint8_t msg_print_error( char *str, uint8_t error ) {
 }
 
 //******************************************************************
-
-static uint8_t msg_print_raw( char *str, uint8_t raw ) {
+static uint8_t msg_print_raw( char *str, uint8_t raw, uint8_t i ) {
   uint8_t n = 0;
 
-  n = sprintf( str,"%02x.",raw ); 
+  if( !i ) n = sprintf( str,"# ");  
+  n = sprintf( str+n,"%02x.",raw ); 
 
   return n;
 }
@@ -855,7 +855,8 @@ static uint8_t msg_print_field( struct message *msg, char *buff ) {
     // Multi buffer field
     if( msg->error ){
       if( msg->count < msg->nBytes ) {
-        nBytes = msg_print_raw( buff, msg->raw[ msg->count++ ] ); 
+        nBytes = msg_print_raw( buff, msg->raw[ msg->count ], msg->count );
+		msg->count++;
       } else if( msg->nBytes ) {
         nBytes = sprintf( buff, "\r\n" );
 		msg->error = 0;
@@ -1114,22 +1115,24 @@ uint8_t msg_tx_byte( struct message *msg ) {
 }
 
 static uint8_t msg_tx_raw( struct message *msg ) {
-  static uint8_t n = 0, n1=0;
+  static uint8_t n = 0, n1=0, i=0;
   static char buff[4];
 
   if( n )
 	n -= tty_put_str( (uint8_t *)buff, n );
-
+  
   if( !(n+n1) ) {
     uint8_t byte = msg_tx_byte( msg );
 	if( byte )
-      n = msg_print_raw( buff, byte );
+      n = msg_print_raw( buff, byte, i++ );
     else
 	  n1 = sprintf( buff, "\r\n" );
   }
 
   if( n1 )
 	n1 -= tty_put_str( (uint8_t *)buff, n1 );
+  
+  if( !(n+n1) ) i = 0;
   
   return n+n1;
 }
