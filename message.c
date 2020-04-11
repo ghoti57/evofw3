@@ -302,7 +302,8 @@ static void msg_print( struct message *msg ) {
   msg_print_error( msg->error );
   
   tty_write_str("\r\n");
-  
+
+  if( msg->opcode[0]==0x23 && msg->opcode[0]==0x09 && msg->len==21 && msg->payload[0]!=0x00 ) msg_print_raw( msg->raw, msg->nBytes ); else 
   if( msg->error ) msg_print_raw( msg->raw, msg->nBytes );
 }
 
