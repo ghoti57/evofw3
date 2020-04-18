@@ -21,7 +21,7 @@
   _MSG_ERR( MSG_MANC_ERR,  "Invalid Manchester Code" ) \
   _MSG_ERR( MSG_CSUM_ERR,  "Checksum error" ) \
   _MSG_ERR( MSG_TRUNC_ERR, "Truncated" ) \
-  
+
 #define _MSG_ERR(_e,_t) , _e
 enum msg_err_code { MSG_OK _MSG_ERR_LIST, MSG_ERR_MAX };
 #undef _MSG_ERR
@@ -44,9 +44,9 @@ enum msg_err_code { MSG_OK _MSG_ERR_LIST, MSG_ERR_MAX };
 ********
 * NOTE *
 ********
-* The manchester decode process converts the data from 
+* The manchester decode process converts the data from
 *     2x8 bit little-endian to 8 bit big-endian
-* The manchester encode process converts the data from 
+* The manchester encode process converts the data from
 *     8 bit big-endian to 2x8 bit little-endian
 *
 * Since only a small subset of 8-bit values are actually allowed in
@@ -55,25 +55,25 @@ enum msg_err_code { MSG_OK _MSG_ERR_LIST, MSG_ERR_MAX };
 *
 */
 
-// Convert big-endian 4 bits to little-endian byte 
+// Convert big-endian 4 bits to little-endian byte
 static uint8_t const man_encode[16] = {
   0x55, 0x95, 0x65, 0xA5, 0x59, 0x99, 0x69, 0xA9,
-  0x56, 0x96, 0x66, 0xA6, 0x5A, 0x9A, 0x6A, 0xAA 
+  0x56, 0x96, 0x66, 0xA6, 0x5A, 0x9A, 0x6A, 0xAA
 };
 
 // Convert little-endian 4 bits to 2-bit big endian
 static uint8_t man_decode[16] = {
   0xF, 0xF, 0xF, 0xF, 0xF, 0x0, 0x2, 0xF,
-  0xF, 0x1, 0x3, 0xF, 0xF, 0xF, 0xF, 0xF 
+  0xF, 0x1, 0x3, 0xF, 0xF, 0xF, 0xF, 0xF
 };
 
-static inline int manchester_code_valid( uint8_t code ) { 
- return ( man_decode[(code>>4)&0xF]!=0xF ) && ( man_decode[(code   )&0xF]!=0xF ) ; 
+static inline int manchester_code_valid( uint8_t code ) {
+ return ( man_decode[(code>>4)&0xF]!=0xF ) && ( man_decode[(code   )&0xF]!=0xF ) ;
 }
 
 static inline uint8_t manchester_decode( uint8_t byte ) {
   uint8_t decoded;
-  
+
   decoded  = man_decode[( byte    ) & 0xF ]<<2;
   decoded |= man_decode[( byte>>4 ) & 0xF ];
 
@@ -94,19 +94,19 @@ static inline void manchester_encode( uint8_t value, uint8_t *byte1, uint8_t *by
 struct message {
   uint8_t state;
   uint8_t count;
-  
-  uint8_t fields;	// Fields specified in header
-  uint8_t rxFields;	// Fields actually received
+
+  uint8_t fields;  // Fields specified in header
+  uint8_t rxFields;  // Fields actually received
   uint8_t error;
-  
+
   uint8_t decoded;
 
   uint8_t addr[3][3];
   uint8_t param[2];
-  
+
   uint8_t opcode[2];
   uint8_t len;
-  
+
   uint8_t csum;
   uint8_t rssi;
 
@@ -127,16 +127,16 @@ static void msg_reset( struct message *msg ) {
 ** Message Header
 ********************************************************/
 
-#define F_MASK   0x03
-#define F_RQ     0x00
-#define F_I		0x01
-#define F_W      0x02
-#define F_RP     0x03
+#define F_MASK  0x03
+#define F_RQ    0x00
+#define F_I     0x01
+#define F_W     0x02
+#define F_RP    0x03
 inline uint8_t pkt_type(uint8_t flags) { return flags & F_MASK; }
-inline void set_request(uint8_t *flags)     { *flags = F_RQ; }
-inline void set_information(uint8_t *flags) { *flags = F_I; }
-inline void set_write(uint8_t *flags)       { *flags = F_W; }
-inline void set_response(uint8_t *flags)    { *flags = F_RP; }
+inline void set_request(uint8_t *flags)      { *flags = F_RQ; }
+inline void set_information(uint8_t *flags)  { *flags = F_I; }
+inline void set_write(uint8_t *flags)        { *flags = F_W; }
+inline void set_response(uint8_t *flags)     { *flags = F_RP; }
 
 #define F_ADDR0  0x10
 #define F_ADDR1  0x20
@@ -181,12 +181,12 @@ static uint8_t get_header( uint8_t flags ) {
 
   for( i=0 ; i<sizeof(header_flags) ; i++ ) {
     if( flags==header_flags[i] )
-	  break;
+      break;
   }
 
-  return i<<2;	// Will return 0x40 if not found
+  return i<<2;  // Will return 0x40 if not found
 }
-  
+
 #define HDR_PARAM0 0x02
 #define HDR_PARAM1 0x01
 inline uint8_t hdr_param0(uint8_t header)    { return header & HDR_PARAM0; }
@@ -198,41 +198,41 @@ inline uint8_t hdr_param1(uint8_t header)    { return header & HDR_PARAM1; }
 
 static void msg_print_rssi( uint8_t rssi, uint8_t valid ) {
   if( valid ) {
-	char str[8];
+    char str[8];
     sprintf(str, "%03u ", rssi );
     tty_write_str(str);
   } else {
-	tty_write_str("--- ");
+    tty_write_str("--- ");
   }
 }
-		
+
 static void msg_print_type( uint8_t type ) {
   static char const * const Type[4] = { "RQ ", " I "," W ","RP " };
   tty_write_str( Type[type] );
 }
-		
+
 static void msg_print_addr( uint8_t *addr, uint8_t valid ) {
   if( valid ) {
-	uint8_t  class = addr[0] >> 2;
-	uint32_t dev = (uint32_t)( addr[0] & 0x03 ) << 16
-	             | (uint32_t)( addr[1]        ) <<  8
-	             | (uint32_t)( addr[2]        )       ;
-				 
-	char str[12];
+    uint8_t  class = addr[0] >> 2;
+    uint32_t dev = (uint32_t)( addr[0] & 0x03 ) << 16
+                 | (uint32_t)( addr[1]        ) <<  8
+                 | (uint32_t)( addr[2]        )       ;
+
+    char str[12];
     sprintf(str, "%02hu:%06lu ", class, dev );
     tty_write_str(str);
   } else {
-	tty_write_str("--:------ ");
+    tty_write_str("--:------ ");
   }
 }
 
 static void msg_print_param( uint8_t param, uint8_t valid ) {
   if( valid ) {
-	char str[8];
+    char str[8];
     sprintf(str, "%03u ", param );
     tty_write_str(str);
   } else {
-	tty_write_str("--- ");
+    tty_write_str("--- ");
   }
 }
 
@@ -242,36 +242,36 @@ static void msg_print_opcode( uint8_t *opcode, uint8_t valid ) {
     tty_write_hex( opcode[1] );
     tty_write_char(' ');
   } else {
-	tty_write_str("???? ");
+    tty_write_str("???? ");
   }
 }
 
 static void msg_print_len( uint8_t len, uint8_t valid ) {
   if( valid ) {
-	char str[8];
+    char str[8];
     sprintf(str, "%03u ", len );
     tty_write_str(str);
   } else {
-	tty_write_str("??? ");
+    tty_write_str("??? ");
   }
 }
 
 static void msg_print_payload( uint8_t *payload, uint8_t valid ) {
-  while( valid ) { 
-	tty_write_hex( *payload );
-	payload++;
-	valid--;
+  while( valid ) {
+    tty_write_hex( *payload );
+    payload++;
+    valid--;
   }
 }
 
 static void msg_print_error( uint8_t error ) {
 #define _MSG_ERR(_e,_t) , _t
- static char const *const msg_err[MSG_ERR_MAX] = { "" _MSG_ERR_LIST };
+  static char const *const msg_err[MSG_ERR_MAX] = { "" _MSG_ERR_LIST };
 #undef _MSG_ERR
 
   if( error ) {
-	tty_write_str("* ");
-	if( error < MSG_ERR_MAX )
+    tty_write_str("* ");
+    if( error < MSG_ERR_MAX )
       tty_write_str( msg_err[error] );
     else
       tty_write_str("UNKNOWN");
@@ -280,16 +280,18 @@ static void msg_print_error( uint8_t error ) {
 
 static void msg_print_raw( uint8_t *raw, uint8_t nBytes ) {
   tty_write_str("# ");
-  while( nBytes ) { 
-	tty_write_hex( *raw );tty_write_char('.');
-	raw++;
-	nBytes--;
+
+  while( nBytes ) {
+    tty_write_hex( *raw );tty_write_char('.');
+    raw++;
+    nBytes--;
   }
+
   tty_write_str("\r\n");
 }
 
 static void msg_print( struct message *msg ) {
-  
+
   msg_print_rssi( msg->rssi, msg->rxFields&F_RSSI );
   msg_print_type( msg->fields & F_MASK );
   msg_print_param( msg->param[0], msg->rxFields&F_PARAM0 );
@@ -300,9 +302,9 @@ static void msg_print( struct message *msg ) {
   msg_print_len( msg->len, msg->rxFields&F_LEN );
   msg_print_payload( msg->payload, msg->nPayload );
   msg_print_error( msg->error );
-  
+
   tty_write_str("\r\n");
-  
+
   if( msg->error ) msg_print_raw( msg->raw, msg->nBytes );
 }
 
@@ -328,7 +330,7 @@ static struct message *msg_alloc(void) {
     Msg[msgOut] = NULL;
     msgOut = ( msgOut+1 )  % 8;
   }
-  
+
   return msg;
 }
 
@@ -352,7 +354,7 @@ static struct message *msg_get(void) {
     MsgRx[msgRxOut] = NULL;
     msgRxOut = ( msgRxOut+1 ) % 8;
   }
-  
+
   return msg;
 }
 
@@ -379,13 +381,14 @@ enum message_state {
 static uint8_t msg_rx_signature( struct message *msg, uint8_t byte ) {
   static uint8_t const signature[] = { 0xCC, 0xAA, 0xCA };
   uint8_t state = S_SIGNATURE;
-  
+
   // Validate it?
   msg->count++;
   if( msg->count==sizeof(signature) ) {
-	 state = S_HEADER;
-	 msg->count = 0;
+   state = S_HEADER;
+   msg->count = 0;
   }
+
   return state;
 }
 
@@ -404,9 +407,9 @@ static uint8_t msg_rx_addr( struct message *msg, uint8_t addr, uint8_t byte ) {
 
   msg->addr[addr][msg->count++] = byte;
   if( msg->count==sizeof( msg->addr[0] ) ) {
-	msg->count = 0;
-	state += 1;
-	msg->rxFields |= F_ADDR0 << addr;
+    msg->count = 0;
+    state += 1;
+    msg->rxFields |= F_ADDR0 << addr;
   }
 
   return state;
@@ -418,7 +421,7 @@ static uint8_t msg_rx_param( struct message *msg, uint8_t param, uint8_t byte ) 
   msg->param[param] = byte;
   state += 1;
   msg->rxFields |= F_PARAM0 << param;
-  
+
   return state;
 }
 
@@ -427,11 +430,11 @@ static uint8_t msg_rx_opcode( struct message *msg, uint8_t byte ) {
 
   msg->opcode[msg->count++] = byte;
   if( msg->count==sizeof( msg->opcode ) ) {
-	msg->count = 0;
-	state += 1;
-	msg->rxFields |= F_OPCODE ;
+    msg->count = 0;
+    state += 1;
+    msg->rxFields |= F_OPCODE ;
   }
-  
+
   return state;
 }
 
@@ -441,7 +444,7 @@ static uint8_t msg_rx_len( struct message *msg, uint8_t byte ) {
   msg->len = byte;
   state += 1;
   msg->rxFields |= F_LEN;
-  
+
   return state;
 }
 
@@ -449,15 +452,15 @@ static uint8_t msg_rx_payload( struct message *msg, uint8_t byte ) {
   uint8_t state = S_PAYLOAD;
 
   if( msg->nPayload < MAX_PAYLOAD ) {
-	msg->payload[msg->nPayload++] = byte;
+    msg->payload[msg->nPayload++] = byte;
   }
 
   msg->count++;
   if( msg->count==msg->len ) {
-	msg->count = 0;
-	state = S_CHECKSUM;
+    msg->count = 0;
+    state = S_CHECKSUM;
   }
-  
+
   return state;
 }
 
@@ -465,7 +468,7 @@ static uint8_t msg_rx_checksum( struct message *msg, uint8_t byte ) {
   uint8_t state = S_TRAILER;
 
   if( msg->csum != 0 && !msg->error )
-	msg->error = MSG_CSUM_ERR;
+    msg->error = MSG_CSUM_ERR;
 
   return state;
 }
@@ -473,14 +476,14 @@ static uint8_t msg_rx_checksum( struct message *msg, uint8_t byte ) {
 static uint8_t msg_rx_trailer( struct message *msg, uint8_t byte ) {
   static uint8_t trailer[] = { 0xAC };
   uint8_t state = S_TRAILER;
-  
+
   // Validate it?
   msg->count++;
   if( msg->count==sizeof(trailer) ) {
-	 state = S_COMPLETE;
-	 msg->count = 0;
+    state = S_COMPLETE;
+    msg->count = 0;
   }
-  
+
   return state;
 }
 
@@ -488,33 +491,33 @@ static struct message *msgRx;
 static void msg_rx_process(uint8_t byte) {
   msgRx->raw[msgRx->nBytes] = byte;
   msgRx->nBytes++;
-  
-  if( msgRx->state == S_SIGNATURE ) 
-	msgRx->state = msg_rx_signature( msgRx, byte );
-  else if( msgRx->state == S_TRAILER ) 
-	msgRx->state = msg_rx_trailer( msgRx, byte );
+
+  if( msgRx->state == S_SIGNATURE )
+    msgRx->state = msg_rx_signature( msgRx, byte );
+  else if( msgRx->state == S_TRAILER )
+    msgRx->state = msg_rx_trailer( msgRx, byte );
   else if( msgRx->state != S_TRAILER ) {
-	// Bytes here come in Manchester code pairs
-	if( !manchester_code_valid(byte) ) msgRx->error = MSG_MANC_ERR;
+    // Bytes here come in Manchester code pairs
+    if( !manchester_code_valid(byte) ) msgRx->error = MSG_MANC_ERR;
     msgRx->decoded |= manchester_decode(byte);
     if( !( msgRx->nBytes & 1 ) )
       msgRx->decoded <<= 4;
     else  {
-	  msgRx->csum += msgRx->decoded;
-	  switch( msgRx->state ) {
-      case S_HEADER:	msgRx->state = msg_rx_header( msgRx, msgRx->decoded ); break;
-      case S_ADDR0:     if( msgRx->fields & F_ADDR0 ) { msgRx->state = msg_rx_addr( msgRx, 0, msgRx->decoded ); break; }   /* fallthrough */
-      case S_ADDR1:     if( msgRx->fields & F_ADDR1 ) { msgRx->state = msg_rx_addr( msgRx, 1, msgRx->decoded ); break; }   /* fallthrough */
-      case S_ADDR2:     if( msgRx->fields & F_ADDR2 ) { msgRx->state = msg_rx_addr( msgRx, 2, msgRx->decoded ); break; }   /* fallthrough */
-      case S_PARAM0:    if( msgRx->fields & F_PARAM0 ) { msgRx->state = msg_rx_param( msgRx, 0, msgRx->decoded ); break; } /* fallthrough */
-      case S_PARAM1:    if( msgRx->fields & F_PARAM1 ) { msgRx->state = msg_rx_param( msgRx, 1, msgRx->decoded ); break; } /* fallthrough */
-      case S_OPCODE:    msgRx->state = msg_rx_opcode( msgRx, msgRx->decoded ); break;
-      case S_LEN:       msgRx->state = msg_rx_len( msgRx, msgRx->decoded ); break;
-      case S_PAYLOAD:   msgRx->state = msg_rx_payload( msgRx, msgRx->decoded ); break;
-      case S_CHECKSUM:  msgRx->state = msg_rx_checksum( msgRx, msgRx->decoded ); break;
-	  }
-	  msgRx->decoded	 = 0;
-	}
+      msgRx->csum += msgRx->decoded;
+      switch( msgRx->state ) {
+        case S_HEADER:                                   { msgRx->state = msg_rx_header( msgRx, msgRx->decoded );   break; }
+        case S_ADDR0:     if( msgRx->fields & F_ADDR0 )  { msgRx->state = msg_rx_addr( msgRx, 0, msgRx->decoded );  break; } /* fallthrough */
+        case S_ADDR1:     if( msgRx->fields & F_ADDR1 )  { msgRx->state = msg_rx_addr( msgRx, 1, msgRx->decoded );  break; } /* fallthrough */
+        case S_ADDR2:     if( msgRx->fields & F_ADDR2 )  { msgRx->state = msg_rx_addr( msgRx, 2, msgRx->decoded );  break; } /* fallthrough */
+        case S_PARAM0:    if( msgRx->fields & F_PARAM0 ) { msgRx->state = msg_rx_param( msgRx, 0, msgRx->decoded ); break; } /* fallthrough */
+        case S_PARAM1:    if( msgRx->fields & F_PARAM1 ) { msgRx->state = msg_rx_param( msgRx, 1, msgRx->decoded ); break; } /* fallthrough */
+        case S_OPCODE:                                   { msgRx->state = msg_rx_opcode( msgRx, msgRx->decoded );   break; }
+        case S_LEN:                                      { msgRx->state = msg_rx_len( msgRx, msgRx->decoded );      break; }
+        case S_PAYLOAD:                                  { msgRx->state = msg_rx_payload( msgRx, msgRx->decoded );  break; }
+        case S_CHECKSUM:                                 { msgRx->state = msg_rx_checksum( msgRx, msgRx->decoded ); break; }
+      }
+      msgRx->decoded   = 0;
+    }
   }
 }
 
@@ -530,8 +533,8 @@ static void msg_rx_start(void) {
 static void msg_rx_end(void) {
   // All optional fields received as expected
   if(   ( ( msgRx->rxFields & F_OPTION ) != ( msgRx->fields & F_OPTION ) )
-	 || ( ( msgRx->rxFields & F_MAND   ) != F_MAND  )
-	 || ( msgRx->len != msgRx->nPayload ) ) {
+     || ( ( msgRx->rxFields & F_MAND   ) != F_MAND  )
+     || ( msgRx->len != msgRx->nPayload ) ) {
     msgRx->error = MSG_TRUNC_ERR;
   }
 
@@ -545,12 +548,12 @@ void msg_rx_byte( uint8_t byte ) {
 
   if( byte==MSG_START ) {
     msg_rx_start();
-  }	else if( msgRx ) {
+  }  else if( msgRx ) {
     if( byte==MSG_END ) {
       msg_rx_end();
     } else if( byte==0x00 ) {
       msg_rx_rssi(0);
-	  msg_rx_end();
+      msg_rx_end();
       msg_rx_start();
     } else {
       msg_rx_process( byte );
@@ -563,7 +566,7 @@ void msg_rx_byte( uint8_t byte ) {
 void msg_work(void) {
   struct message *msg = msg_get();
   if( msg != NULL ) {
-	msg_print( msg );
+    msg_print( msg );
     msg_free( msg );
   }
 }
@@ -582,5 +585,3 @@ static void msg_create_pool(void) {
 void msg_init(void) {
   msg_create_pool();
 }
-
-

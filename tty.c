@@ -99,12 +99,12 @@ static void cmd_byte( uint8_t b ) {
     if( b=='\r' ) {
       struct command *command = commands;
 
-      while( ( command->cmd != cmd ) && ( command->cmd != '\0' ) ) 
+      while( ( command->cmd != cmd ) && ( command->cmd != '\0' ) )
         command++;
-    
+
       if( command->func )
         ( command->func )( len,param );
-    
+
       cmd = '\0';
       len = 0;
     } else {
@@ -112,7 +112,7 @@ static void cmd_byte( uint8_t b ) {
         param[len++] = b;
     }
   }
-  
+
   tty_write_char(b);
   if( b=='\r' )
     tty_write_char('\n');

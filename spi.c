@@ -4,7 +4,7 @@
 
 static void spi_set_clock( uint32_t Fosc, uint32_t sckFreq )
 {
-  // ATMEGA328 data sheet Table23-5 
+  // ATMEGA328 data sheet Table23-5
   // Relationship between SCK and Oscillator Frequency
   static struct spi_sck_options {
     uint8_t spi2x :1;

@@ -23,10 +23,10 @@
 // CC1101 register settings
 static const uint8_t PROGMEM CC_REGISTER_VALUES[] = {
 
-  CC1100_IOCFG2, 0x0d, //0x00,  // GDO2- FIFO interrupt
+  CC1100_IOCFG2, 0x0d,  //0x00,  // GDO2- FIFO interrupt
   CC1100_IOCFG1, 0x2E,  // GDO1- not used
   CC1100_IOCFG0, 0x2E,  // GDO0- Frame interrupt
-  
+
   CC1100_PKTLEN,   0x00, //
   CC1100_PKTCTRL1, 0x00, //
   CC1100_PKTCTRL0, 0x32, // 0x02, //
@@ -35,7 +35,7 @@ static const uint8_t PROGMEM CC_REGISTER_VALUES[] = {
   CC1100_FREQ2,   0x21,  //
   CC1100_FREQ1,   0x65,  //
   CC1100_FREQ0,   0x6C,  //
-  
+
   CC1100_MDMCFG4, 0x6A,  //
   CC1100_MDMCFG3, 0x83,  // (DRATE_M=131 data rate=38,383.4838867Hz)
   CC1100_MDMCFG2, 0x10,  // (GFSK  15/16 Sync Word Carrier sense above threshold)
@@ -48,7 +48,7 @@ static const uint8_t PROGMEM CC_REGISTER_VALUES[] = {
   CC1100_MCSM0,   0x18,  // (0x18=11000 FS_AUTOCAL=1 When going from IDLE to RX or TX)
 
   CC1100_FOCCFG,  0x16,  //
-  
+
   CC1100_AGCCTRL2, 0x43, //
   CC1100_AGCCTRL1, 0x40, //
   CC1100_AGCCTRL0, 0x91, //
@@ -62,7 +62,7 @@ static const uint8_t PROGMEM CC_REGISTER_VALUES[] = {
   CC1100_TEST2,   0x81,  //
   CC1100_TEST1,   0x35,  //
   CC1100_TEST0,   0x09,  //
-  
+
   CC1100_PATABLE, 0xC3   //
 };
 
@@ -110,11 +110,11 @@ static void cc_enter_rx_mode(void) {
 uint8_t cc_read_rssi(void) {
   // CC1101 Section 17.3
   int8_t rssi = (int8_t )cc_read( CC1100_RSSI );
-  rssi = rssi/2 - 74;  // answer in range -138 to -10 
-  
+  rssi = rssi/2 - 74;  // answer in range -138 to -10
+
   return (uint8_t)( -rssi ); // returns 10 to 138
 }
-	
+
 void cc_init(void) {
   spi_init();
 

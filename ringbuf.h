@@ -16,8 +16,8 @@ extern uint8_t  rb_get(rb_t *rb);
 extern void     rb_reset(rb_t *rb);
 extern uint8_t  rb_empty(rb_t *rb);
 extern uint8_t  rb_full(rb_t *rb);
-extern uint8_t rb_space(rb_t *rb);
-extern uint8_t rb_available(rb_t *rb);
+extern uint8_t  rb_space(rb_t *rb);
+extern uint8_t  rb_available(rb_t *rb);
 
 /********************************************************************
 ** use RINGBUF to declare ring buffer in code file that owns buffer

@@ -15,7 +15,7 @@ uint8_t get_hex( uint8_t len, uint8_t *param ) {
     value <<= 4;
     value += ( p>='0' && p<='9' ) ? p - '0'
             :( p>='A' && p<='F' ) ? p - 'A' + 10
-            :( p>='a' && p<='f' ) ? p - 'a' + 10 
+            :( p>='a' && p<='f' ) ? p - 'a' + 10
             : 0;
   }
 
