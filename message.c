@@ -57,14 +57,14 @@ enum msg_err_code { MSG_OK _MSG_ERR_LIST, MSG_ERR_MAX };
 
 // Convert big-endian 4 bits to little-endian byte
 static uint8_t const man_encode[16] = {
-  0x55, 0x95, 0x65, 0xA5, 0x59, 0x99, 0x69, 0xA9,
-  0x56, 0x96, 0x66, 0xA6, 0x5A, 0x9A, 0x6A, 0xAA
+  0xAA, 0xA9, 0xA6, 0xA5,  0x9A, 0x99, 0x96, 0x95,
+  0x6A, 0x69, 0x66, 0x65,  0x5A, 0x59, 0x56, 0x55
 };
 
 // Convert little-endian 4 bits to 2-bit big endian
 static uint8_t man_decode[16] = {
-  0xF, 0xF, 0xF, 0xF, 0xF, 0x0, 0x2, 0xF,
-  0xF, 0x1, 0x3, 0xF, 0xF, 0xF, 0xF, 0xF
+  0xF, 0xF, 0xF, 0xF, 0xF, 0x3, 0x2, 0xF,
+  0xF, 0x1, 0x0, 0xF, 0xF, 0xF, 0xF, 0xF
 };
 
 static inline int manchester_code_valid( uint8_t code ) {
@@ -74,8 +74,8 @@ static inline int manchester_code_valid( uint8_t code ) {
 static inline uint8_t manchester_decode( uint8_t byte ) {
   uint8_t decoded;
 
-  decoded  = man_decode[( byte    ) & 0xF ]<<2;
-  decoded |= man_decode[( byte>>4 ) & 0xF ];
+  decoded  = man_decode[( byte    ) & 0xF ];
+  decoded |= man_decode[( byte>>4 ) & 0xF ]<<2;
 
   return decoded;
 }
@@ -379,7 +379,7 @@ enum message_state {
 };
 
 static uint8_t msg_rx_signature( struct message *msg, uint8_t byte ) {
-  static uint8_t const signature[] = { 0xCC, 0xAA, 0xCA };
+  static uint8_t const signature[] = { 0x33, 0x55, 0x53 };
   uint8_t state = S_SIGNATURE;
 
   // Validate it?
@@ -474,7 +474,7 @@ static uint8_t msg_rx_checksum( struct message *msg, uint8_t byte ) {
 }
 
 static uint8_t msg_rx_trailer( struct message *msg, uint8_t byte ) {
-  static uint8_t trailer[] = { 0xAC };
+  static uint8_t trailer[] = { 0x35 };
   uint8_t state = S_TRAILER;
 
   // Validate it?

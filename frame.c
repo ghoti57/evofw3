@@ -263,7 +263,7 @@ static uint8_t rx_frame(uint8_t interval) {
       rx_frame_end();
       state = RX_DONE;
     }
-  } else if( rx.lastByte==0xAC ) {
+  } else if( rx.lastByte==0x35 ) {
     rx_frame_end();
     state = RX_DONE;
   }
@@ -390,8 +390,8 @@ static uint8_t rx_process_edges( uint8_t *edges, uint8_t nEdges ) {
         if( rx_t==rx_tBit ) {
           if( rx_tBit == ONE_BIT ) { // START BIT
         } else if( rx_tBit < TEN_BITS ) {
-          uint8_t bit = ( rx_hi > HALF_BIT );
-          rx_byte <<= 1;
+          uint8_t bit = ( rx_hi > HALF_BIT ) ? 0x80 : 0x00 ;
+          rx_byte >>= 1;
           rx_byte  |= bit;
         }
 
