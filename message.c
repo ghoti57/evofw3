@@ -17,11 +17,12 @@
 #define DEBUG_MSG(_v) DEBUG4(_v)
 
 #define _MSG_ERR_LIST \
-  _MSG_ERR( MSG_SIG_ERR,     "Bad Signature" ) \
-  _MSG_ERR( MSG_MANC_ERR,    "Invalid Manchester Code" ) \
-  _MSG_ERR( MSG_CSUM_ERR,    "Checksum error" ) \
-  _MSG_ERR( MSG_TRUNC_ERR,   "Truncated" ) \
-  _MSG_ERR( MSG_SUSPECT_ERR, "Suspect payload" ) \
+  _MSG_ERR( MSG_SIG_ERR,      "Bad Signature" ) \
+  _MSG_ERR( MSG_MANC_ERR,     "Invalid Manchester Code" ) \
+  _MSG_ERR( MSG_CSUM_ERR,     "Checksum error" ) \
+  _MSG_ERR( MSG_TRUNC_ERR,    "Truncated" ) \
+  _MSG_ERR( MSG_WARNING,      "Warning" ) \
+  _MSG_ERR( MSG_SUSPECT_WARN, "Suspect payload" ) \
 
 #define _MSG_ERR(_e,_t) , _e
 enum msg_err_code { MSG_OK _MSG_ERR_LIST, MSG_ERR_MAX };
@@ -271,7 +272,11 @@ static void msg_print_error( uint8_t error ) {
 #undef _MSG_ERR
 
   if( error ) {
-    tty_write_str("* ");
+    if( error<MSG_WARNING )
+      tty_write_str("* ");
+    else
+      tty_write_str("# ");
+
     if( error < MSG_ERR_MAX )
       tty_write_str( msg_err[error] );
     else
@@ -295,7 +300,7 @@ static uint8_t check_payload_2309( struct message *msg ) {
   uint8_t i;
 
   for( i=0 ; i<msg->len ; i+=3 ) {
-    if( msg->payload[i] > 11 ) return MSG_SUSPECT_ERR;  // Bad zone number
+    if( msg->payload[i] > 11 ) return MSG_SUSPECT_WARN;  // Bad zone number
   }
 
   return MSG_OK;
