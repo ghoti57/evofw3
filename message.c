@@ -17,10 +17,11 @@
 #define DEBUG_MSG(_v) DEBUG4(_v)
 
 #define _MSG_ERR_LIST \
-  _MSG_ERR( MSG_SIG_ERR,   "Bad Signature" ) \
-  _MSG_ERR( MSG_MANC_ERR,  "Invalid Manchester Code" ) \
-  _MSG_ERR( MSG_CSUM_ERR,  "Checksum error" ) \
-  _MSG_ERR( MSG_TRUNC_ERR, "Truncated" ) \
+  _MSG_ERR( MSG_SIG_ERR,     "Bad Signature" ) \
+  _MSG_ERR( MSG_MANC_ERR,    "Invalid Manchester Code" ) \
+  _MSG_ERR( MSG_CSUM_ERR,    "Checksum error" ) \
+  _MSG_ERR( MSG_TRUNC_ERR,   "Truncated" ) \
+  _MSG_ERR( MSG_SUSPECT_ERR, "Suspect payload" ) \
 
 #define _MSG_ERR(_e,_t) , _e
 enum msg_err_code { MSG_OK _MSG_ERR_LIST, MSG_ERR_MAX };
@@ -290,7 +291,30 @@ static void msg_print_raw( uint8_t *raw, uint8_t nBytes ) {
   tty_write_str("\r\n");
 }
 
+static uint8_t check_payload_2309( struct message *msg ) {
+  uint8_t i;
+
+  for( i=0 ; i<msg->len ; i+=3 ) {
+    if( msg->payload[i] > 11 ) return MSG_SUSPECT_ERR;  // Bad zone number
+  }
+
+  return MSG_OK;
+}
+
+static uint8_t msg_check_payload( struct message *msg ) {
+  uint8_t error = MSG_OK;
+
+  uint16_t opcode = ( msg->opcode[0]<<8 ) + msg->opcode[1];
+  switch( opcode ) {
+  case 0x2309: error = check_payload_2309(msg); break;
+  }
+
+  return error;
+}
+
 static void msg_print( struct message *msg ) {
+  if( msg->error==MSG_OK )
+    msg->error = msg_check_payload( msg );
 
   msg_print_rssi( msg->rssi, msg->rxFields&F_RSSI );
   msg_print_type( msg->fields & F_MASK );
