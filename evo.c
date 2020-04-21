@@ -15,6 +15,8 @@
 
 #include "version.h"
 
+void ob(uint8_t b){}
+
 void main_init(void) {
   char buff[24];
 
@@ -27,7 +29,7 @@ void main_init(void) {
 
   wdt_disable();
   led_init();
-  tty_init(0);
+  tty_init(ob);
 
   // Wire up components
   spi_init();
