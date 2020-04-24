@@ -55,6 +55,7 @@
 #define DEBUG_PIN2        ( 1<<PORTC1 )
 #define DEBUG_PIN3        ( 1<<PORTC2 )
 #define DEBUG_PIN4        ( 1<<PORTC4 )
+#define DEBUG_PIN5        ( 1<<PORTC5 )
 
 // TTY USART
 #define TTY_UDRE_VECT   USART_UDRE_vect
