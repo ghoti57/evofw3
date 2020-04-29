@@ -15,10 +15,9 @@
 
 #include "version.h"
 
-void ob(uint8_t b){}
-
 void main_init(void) {
   char buff[24];
+  uint8_t n;
 
   // OSCCAL=((uint32_t)OSCCAL * 10368) / 10000;
 
@@ -29,7 +28,7 @@ void main_init(void) {
 
   wdt_disable();
   led_init();
-  tty_init(ob);
+  tty_init();
 
   // Wire up components
   spi_init();
@@ -39,8 +38,8 @@ void main_init(void) {
 
   sei();
 
-  sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
-  tty_write_str(buff);
+  n = sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
+  tty_put_str( buff, n );
 }
 
 void main_work(void) {
