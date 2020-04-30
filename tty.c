@@ -1,7 +1,7 @@
 /**************************************************************************
 ** tty.c
-** 
-** Host facing UART 
+**
+** Host facing UART
 */
 #include <avr/interrupt.h>
 
@@ -29,10 +29,10 @@ static void tx_go(uint8_t c) {
 
 static uint8_t tty_tx_get(void) {
   uint8_t byte = 0x00;
-  
+
   if( ttyTx_out != ttyTx_in ) {
     byte = ttyTx[ttyTx_out];
-	ttyTx_out = ( ttyTx_out+1 ) % TXBUF;
+    ttyTx_out = ( ttyTx_out+1 ) % TXBUF;
   }
 
   return byte;
@@ -43,54 +43,54 @@ static volatile uint8_t echo = 0;
 static void tty_do_tx( void ) {
   uint8_t byte;
 
-  if( UCSR0A & ( 1<<UDRE0 ) ) {	// TX buffer is empty
+  if( UCSR0A & ( 1<<UDRE0 ) ) { // TX buffer is empty
     if( rxControl ) { // RX Flow control takes priority
-	  byte = rxControl;
-	  rxControl = 0;
+      byte = rxControl;
+      rxControl = 0;
     } else if( echo ) {
-	  byte = echo;
-	  echo = 0;
+      byte = echo;
+      echo = 0;
     } else {
       byte = tty_tx_get();
     }
 
-	if( byte != 0x00 ) {
-	  DEBUG_TX(1);
+    if( byte != 0x00 ) {
+      DEBUG_TX(1);
       UDR0 = byte;
-//	  UCSR0B |= ( 1<<UDRIE0 );
+//      UCSR0B |= ( 1<<UDRIE0 );
       txActive = 1;
       DEBUG_TX(0);
     } else {
       txActive = 0;
-	}
+    }
   }
 }
 
 static void tty_tx_put(uint8_t byte) {
   ttyTx[ ttyTx_in ] = byte;
   ttyTx_in = ( ttyTx_in+1 ) % TXBUF;
-  if( ttyTx_in == ttyTx_out ) {	// BAD things could happen if we hit this
-	ttyTx_out = ( ttyTx_out+1 ) % TXBUF;
+  if( ttyTx_in == ttyTx_out ) { // BAD things could happen if we hit this
+    ttyTx_out = ( ttyTx_out+1 ) % TXBUF;
   }
 }
 
 uint8_t tty_put_str( uint8_t *byte, uint8_t nByte ) {
   uint8_t space = TXBUF-1;
-  if( ttyTx_in != ttyTx_out ) 
+  if( ttyTx_in != ttyTx_out )
     space = ( ( ( ttyTx_out+TXBUF ) - ttyTx_in - 1 ) % TXBUF );
-	
+
   if( space < nByte )
-    return 0;	// Didn't send anything
+    return 0;  // Didn't send anything
 
   space = nByte;
   while( nByte ) {
     tty_tx_put( *byte );
-	byte++;
-	nByte--;
+    byte++;
+    nByte--;
   }
-  
-  tx_go(0);	// In case it's not active
-  
+
+  tx_go(0);  // In case it's not active
+
   return space;
 }
 
@@ -102,8 +102,8 @@ static uint8_t ttyRx_in;
 static uint8_t ttyRx_out;
 static uint8_t ttyRx[32];
 
-#define XOFF ( 'S' & 0x3F )	// ctrl-S
-#define XON  ( 'Q' & 0x3F )	// ctrl-Q
+#define XOFF ( 'S' & 0x3F ) // ctrl-S
+#define XON  ( 'Q' & 0x3F ) // ctrl-Q
 
 static void tty_rx_control(void) {
   static uint8_t newState, state = XON;
@@ -121,7 +121,7 @@ static void tty_rx_control(void) {
       newState = XOFF;
     else if( bytes==0 ) {
       // Periodically send XON
-	}
+    }
     break;
   }
 
@@ -134,19 +134,19 @@ static void tty_rx_control(void) {
 static void tty_rx_put(uint8_t byte) {
   ttyRx[ ttyRx_in ] = byte;
   ttyRx_in = ( ttyRx_in+1 ) % RXBUF;
-  if( ttyRx_in != ttyRx_out ) {	// BAD things could happen if we hit this
-	ttyRx_out = ( ttyRx_out+1 ) % RXBUF;
+  if( ttyRx_in != ttyRx_out ) { // BAD things could happen if we hit this
+    ttyRx_out = ( ttyRx_out+1 ) % RXBUF;
   }
-  
+
   tty_rx_control();
 }
 
 uint8_t tty_rx_get(void) {
   uint8_t byte = 0x00;
-  
+
   if( ttyRx_in != ttyRx_out ) {
     byte = ttyRx[ttyRx_out];
-	ttyRx_out = ( ttyRx_out+1 ) % RXBUF;
+    ttyRx_out = ( ttyRx_out+1 ) % RXBUF;
   }
 
   tty_rx_control();
@@ -155,9 +155,9 @@ uint8_t tty_rx_get(void) {
 }
 
 static void tty_do_rx() {
-  if( UCSR0A & ( 1<<RXC0 ) ) {	// RX buffer is full
+  if( UCSR0A & ( 1<<RXC0 ) ) { // RX buffer is full
     uint8_t byte = UDR0;
-	tty_rx_put( byte );
+    tty_rx_put( byte );
   }
 }
 
@@ -167,7 +167,7 @@ static void tty_do_rx() {
 ISR(TTY_UDRE_VECT) {
   DEBUG_TX(1);
   UCSR0B &= ~( 1<<UDRIE0 );
-  sei();	// Mustn't risk blocking RX edge ISR
+  sei();  // Mustn't risk blocking RX edge ISR
   tty_do_tx();
   DEBUG_TX(0);
 }
@@ -175,7 +175,7 @@ ISR(TTY_UDRE_VECT) {
 void tty_start_tx(void) {
   uint8_t sreg = SREG;
   cli();
-  
+
   UCSR0B &= ~( 1<<UDRIE0 );
   UCSR0B |=  ( 1<<TXEN0 );
 
@@ -185,7 +185,7 @@ void tty_start_tx(void) {
 void tty_stop_tx(void) {
   uint8_t sreg = SREG;
   cli();
-  
+
   UCSR0B &= ~( 1<<TXEN0 );
   UCSR0B &= ~( 1<<UDRIE0 );
 
@@ -197,7 +197,7 @@ void tty_stop_tx(void) {
 */
 
 ISR(TTY_RX_VECT) {
-  sei();	// Mustn't risk blocking RX edge ISR
+  sei();  // Mustn't risk blocking RX edge ISR
   tty_do_rx();
 }
 
@@ -207,17 +207,17 @@ void tty_start_rx(void) {
 
   // Enable the interrupt while disabled - RX buffer will be empty
 //  UCSR0B |= ( 1<<RXCIE0 );
-  
+
   // Then enable RX
   UCSR0B |= ( 1<<RXEN0 );
-  
+
   SREG = sreg;
 }
 
 void tty_stop_rx(void) {
   uint8_t sreg = SREG;
   cli();
-  
+
   UCSR0B &= ~( 1<<RXEN0 );
   UCSR0B &= ~( 1<<RXCIE0 );
 
@@ -261,15 +261,15 @@ static void tty_init_uart( uint32_t Fosc, uint32_t bitrate )
     UBRR0 = ubrr_1;
   }
 
-  UCSR0B = ( 0 << RXCIE0 ) | ( 0 << TXCIE0 ) | ( 0 << UDRIE0 )	// Interrupts disabled
+  UCSR0B = ( 0 << RXCIE0 ) | ( 0 << TXCIE0 ) | ( 0 << UDRIE0 )  // Interrupts disabled
          | ( 0 << RXEN0  ) | ( 0 << TXEN0  )                    // RX+TX disabled
          | ( 0 << UCSZ02 );                                     // 8 Bits
-  
+
   UCSR0C  = ( 0 << UMSEL01 ) | ( 0 << UMSEL00 )   // Asynchronous
           | ( 0 << UPM01   ) | ( 0 << UPM00   )   // Parity disable
           | ( 0 << USBS0   )                      // 1 stop bit
           | ( 1 << UCSZ01  ) |  ( 1 << UCSZ00 )   // 8 data bits
-		  | ( 0 << UCPOL0  );
+          | ( 0 << UCPOL0  );
 }
 
 void tty_init(void ) {
