@@ -59,7 +59,6 @@ enum uart_rx_states {
   RX_STOP,    // Wait for STOP bit to obtain BYTE SYNCH
   RX_SYNCH,   // Gather bytes and report them to frame layer
   RX_SYNCH0,  // Clock recovery
-  RX_ABORT    // Byte synchronisation lost
 };
 
 static struct uart_rx_state {
@@ -191,7 +190,7 @@ static void rx_byte(void) {
 static uint8_t rx_abort(uint8_t code) {
   rx.lastByte = code;
   rx_byte();
-  return RX_ABORT;
+  return ( rx.level ) ? RX_HIGH : RX_SYNC1;
 }
 
 static uint8_t rx_synch(uint8_t interval) {
@@ -249,7 +248,6 @@ static uint8_t rx_edge(uint8_t interval) {
   return synch;
 }
 
-
 /***********************************************************************************
 ** RX
 ** On Edge interrupts from the radio signal use the counter as a timer
@@ -270,7 +268,8 @@ ISR(GDO0_INT_VECT) {
   rx.level = ( GDO0_PIN & GDO0_IN );  // and the current level
 
   if( rx.level != rx.lastLevel ) {
-    uint8_t interval = ( rx.time - rx.time0 ) >> clockShift;
+    uint16_t interval = ( rx.time - rx.time0 ) >> clockShift;
+    if( interval > 255 ) interval = 255;
 
     uint8_t synch = rx_edge( interval );
     if( synch ) rx.time0 = rx.time;
@@ -361,10 +360,9 @@ ISR(SW_INT_VECT) {
 
   DEBUG_EDGE( 1 );
 
-  if( rx.state != RX_ABORT ) {
-    // Extract byte from previous edges
-    rx.lastByte = rx_process_edges( rx.Edges[1-rx.idx], rx.NEdges[1-rx.idx] );
-  }
+  // Extract byte from previous edges
+  rx.lastByte = rx_process_edges( rx.Edges[1-rx.idx], rx.NEdges[1-rx.idx] );
+
   DEBUG_EDGE( 0 );
 
   // And pass it on to frame to process
