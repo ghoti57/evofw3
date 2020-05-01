@@ -65,6 +65,7 @@ static struct uart_rx_state {
   uint16_t time;
   uint16_t lastTime;
   uint16_t time0;
+  uint8_t  overflow;
 
   uint8_t level;
   uint8_t lastLevel;
@@ -268,8 +269,14 @@ ISR(GDO0_INT_VECT) {
   rx.level = ( GDO0_PIN & GDO0_IN );  // and the current level
 
   if( rx.level != rx.lastLevel ) {
-    uint16_t interval = ( rx.time - rx.time0 ) >> clockShift;
-    if( interval > 255 ) interval = 255;
+    uint16_t interval;
+    if( rx.overflow && ( ( rx.overflow > 1 ) || ( rx.time > rx.time0 ) ) ) {
+        interval = 255;
+    } else {
+      interval = ( rx.time - rx.time0 ) >> clockShift;
+      if( interval > 255 ) interval = 255;
+    }
+    rx.overflow = 0;
 
     uint8_t synch = rx_edge( interval );
     if( synch ) rx.time0 = rx.time;
@@ -280,6 +287,9 @@ ISR(GDO0_INT_VECT) {
   DEBUG_ISR(0);
 }
 
+ISR(TIMER1_OVF_VECTOR) {
+  rx.overflow += 1;
+}
 
 /***************************************************************************
 ** Enable a free-running counter that gives us a time reference for RX
@@ -298,6 +308,8 @@ static void rx_init(void) {
   // This is the additional scaling required in software to reduce the
   // clock rate to 500 KHz
   clockShift = ( F_CPU==16000000 ) ? 2 : 1;
+
+  TIMSK1 |= TOIE1;
 
   SREG = sreg;
 }
