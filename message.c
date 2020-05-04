@@ -195,7 +195,7 @@ static uint8_t msg_print_opcode( char *str, uint8_t *opcode, uint8_t valid ) {
   uint8_t n = 0;
 
   if( valid ) {
-    n = sprintf( str, "%02x%02x ", opcode[0],opcode[1] );
+    n = sprintf( str, "%02X%02X ", opcode[0],opcode[1] );
   } else {
     n= sprintf(str, "???? ");
   }
@@ -218,7 +218,7 @@ static uint8_t msg_print_len( char *str, uint8_t len, uint8_t valid ) {
 static uint8_t msg_print_payload( char *str, uint8_t payload ) {
   uint8_t n=0;
 
-  n = sprintf( str,"%02x",payload );
+  n = sprintf( str,"%02X",payload );
 
   return n;
 }
@@ -242,9 +242,9 @@ static uint8_t msg_print_raw( char *str, uint8_t raw, uint8_t i ) {
   uint8_t n = 0;
 
   if( i )
-    n = sprintf( str,"%02x.",raw );
+    n = sprintf( str,"%02X.",raw );
   else
-    n = sprintf( str,"# %02x.",raw );
+    n = sprintf( str,"# %02X.",raw );
 
   return n;
 }
