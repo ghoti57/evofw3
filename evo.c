@@ -13,8 +13,6 @@
 #include "message.h"
 #include "tty.h"
 
-#include "version.h"
-
 void main_init(void) {
   char buff[24];
   uint8_t n;
@@ -37,9 +35,6 @@ void main_init(void) {
   msg_init();
 
   sei();
-
-  n = sprintf( buff, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
-  tty_put_str( buff, n );
 }
 
 void main_work(void) {

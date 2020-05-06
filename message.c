@@ -11,6 +11,7 @@
 
 #include "config.h"
 #include "tty.h"
+#include "cmd.h"
 
 #include "message.h"
 
@@ -437,12 +438,14 @@ static struct message *Msg[8];
 static uint8_t msgIn=0;
 static uint8_t msgOut=0;
 
-static void msg_free( struct message *msg ) {
-  if( msg != NULL ) {
-    msg_reset( msg );
+static void msg_free( struct message **msg ) {
+  if( msg!=NULL && (*msg)!=NULL ) {
+    msg_reset( (*msg) );
 
-    Msg[ msgIn ] = msg;
+    Msg[ msgIn ] = (*msg);
     msgIn = ( msgIn+1 ) % 8;
+
+    (*msg) = NULL;
   }
 }
 
@@ -475,6 +478,7 @@ static struct message *msg_get(void) {
   if( msg != NULL ) {
     MsgRx[msgRxOut] = NULL;
     msgRxOut = ( msgRxOut+1 ) % 8;
+    msg->state = S_START;
   }
 
   return msg;
@@ -641,36 +645,60 @@ void msg_rx_end( uint8_t nBytes, uint8_t error ) {
 **
 **/
 
+static uint8_t inCmd;
+static uint8_t *cmdBuff;
+static uint8_t nCmd;
+
 void msg_work(void) {
   static struct message *rx = NULL;
+  static struct message *tx = NULL;
+
+  uint8_t byte;
 
   // Print RX messages
   if( rx ) {
     if( !msg_print( rx ) ) {
-      msg_free( rx );
-      rx = NULL;
+      msg_free( &rx );
     }
+  } else if( nCmd ) {
+    nCmd -= tty_put_str( cmdBuff, nCmd );
+    if( !nCmd )
+      inCmd = 0;
   } else {
-    rx = msg_get();
     // If we have a message now we'll start printing it next time
-    if( rx ) {
-      rx->state = S_START;
-    }
+    rx = msg_get();
   }
 
+  // Process serial data from host
+  if( !tx ) tx = msg_alloc();
+
+  byte = tty_rx_get();
+  if( byte ) {
+    if( !tx || tx->state==S_START ) {
+      if( !nCmd && ( byte==CMD || inCmd ) ) {
+        inCmd = cmd( byte, &cmdBuff, &nCmd );
+      }
+    }
+  }
 }
 
 /********************************************************
 ** System startup
 ********************************************************/
-
 static void msg_create_pool(void) {
   static struct message MSG[4];
   uint8_t i;
-  for( i=0 ; i< 4; i++ )
-   msg_free( MSG+i );
+  for( i=0 ; i< 4; i++ ) {
+    struct message *msg = MSG+i;
+    msg_free( &msg );
+  }
 }
 
 void msg_init(void) {
   msg_create_pool();
+
+  // Force a version string to be printed
+  inCmd = cmd(CMD, NULL,NULL );
+  inCmd = cmd('V', NULL,NULL );
+  inCmd = cmd('\n', &cmdBuff, &nCmd );
 }
