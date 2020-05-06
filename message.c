@@ -11,6 +11,7 @@
 
 #include "config.h"
 #include "tty.h"
+#include "trace.h"
 #include "cmd.h"
 
 #include "message.h"
@@ -339,13 +340,13 @@ static uint8_t msg_print_field( struct message *msg, char *buff ) {
 
   case S_TRAILER:   // Don't print trailer, use state for raw data
     // Multi buffer field
-    if( msg->error ){
+    if( msg->error || TRACE(TRC_RAW) ){
       if( msg->count < msg->nBytes ) {
         nBytes = msg_print_raw( buff, msg->raw[msg->count], msg->count );
         msg->count++;
       } else if( msg->nBytes ) {
         nBytes = sprintf( buff, "\r\n" );
-        msg->error = 0;
+        msg->state = S_COMPLETE;
       }
       if( nBytes )
         break;
