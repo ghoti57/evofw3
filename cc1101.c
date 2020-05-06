@@ -22,8 +22,7 @@
 
 // CC1101 register settings
 static const uint8_t PROGMEM CC_REGISTER_VALUES[] = {
-
-  CC1100_IOCFG2, 0x0d,  //0x00,  // GDO2- FIFO interrupt
+  CC1100_IOCFG2, 0x0D, //0x00,  // GDO2- FIFO interrupt
   CC1100_IOCFG1, 0x2E,  // GDO1- not used
   CC1100_IOCFG0, 0x2E,  // GDO0- Frame interrupt
 
@@ -96,7 +95,15 @@ static uint8_t cc_write(uint8_t addr, uint8_t b) {
 }
 
 #define INT_MASK 0
-static void cc_enter_rx_mode(void) {
+void cc_enter_idle_mode(void) {
+  EIMSK &= ~INT_MASK;            // Disable interrupts
+
+  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
+
+  EIFR  |= INT_MASK;          // Acknowledge any  previous edges
+}
+
+void cc_enter_rx_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 
   while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
@@ -104,7 +111,16 @@ static void cc_enter_rx_mode(void) {
   while ( CC_STATE( spi_strobe( CC1100_SRX ) ) != CC_STATE_RX );
 
   EIFR  |= INT_MASK;          // Acknowledge any  previous edges
-//  EIMSK |= INT_MASK;            // Enable interrupts
+}
+
+void cc_enter_tx_mode(void) {
+  EIMSK &= ~INT_MASK;            // Disable interrupts
+
+  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
+  spi_strobe( CC1100_SFSTXON );
+  while ( CC_STATE( spi_strobe( CC1100_STX ) ) != CC_STATE_TX );
+
+  EIFR  |= INT_MASK;          // Acknowledge any  previous edges
 }
 
 uint8_t cc_read_rssi(void) {
@@ -136,5 +152,5 @@ void cc_init(void) {
     cc_write(reg, val);
   }
 
-  cc_enter_rx_mode();
+  cc_enter_idle_mode();
 }
