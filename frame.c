@@ -206,18 +206,18 @@ static void frame_rx_done(void) {
 
 void frame_rx_enable(void) {
   uart_rx_enable();
-  // TODO: radio to RX mode
+  cc_enter_rx_mode();
   rxFrm.state = FRM_RX_SYNCH;
 }
 
 void frame_tx_enable(void) {
   uart_tx_enable();
-  // TODO: radio to TX mode
+  cc_enter_tx_mode();
 }
 
 void frame_disable(void) {
   uart_disable();
-  // TODO: radio to IDLE mode
+  cc_enter_idle_mode();
 }
 
 void frame_init(void) {
