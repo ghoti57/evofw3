@@ -144,12 +144,12 @@ void frame_rx_byte(uint8_t byte) {
     break;
 
   case FRM_RX_MESSAGE:
-    if( byte==FRM_LOST_SYNC ) {
-      rxFrm.state = FRM_RX_ABORT;
-      rxFrm.msgErr = MSG_SYNC_ERR;
-    } else if( byte==FRM_COLLISION ) {
+    if( byte==0x00 ) {
       rxFrm.state = FRM_RX_ABORT;
       rxFrm.msgErr = MSG_CLSN_ERR;
+    } else if( byte==FRM_LOST_SYNC ) {
+      rxFrm.state = FRM_RX_ABORT;
+      rxFrm.msgErr = MSG_SYNC_ERR;
     } else if( byte == evo_tlr[0] ) {
       rxFrm.state = FRM_RX_DONE;
     } else {
@@ -190,12 +190,17 @@ void frame_rx_byte(uint8_t byte) {
 static void frame_rx_done(void) {
   DEBUG_FRAME(1);
 
-  uint8_t rssi = cc_read_rssi();
-
-  msg_rx_rssi( rssi );
-  msg_rx_end(rxFrm.nBytes,rxFrm.msgErr);
+  // Reset rxFrm as quickly as possible after collision can pick up new frame header
+  uint8_t nBytes = rxFrm.nBytes;
+  uint8_t msgErr = rxFrm.msgErr;
+  uint8_t rssi;
 
   frame_rx_reset();
+
+  // Now tell message about the end of frame
+  rssi = cc_read_rssi();
+  msg_rx_rssi( rssi );
+  msg_rx_end(nBytes,msgErr);
 
   DEBUG_FRAME(0);
 }
