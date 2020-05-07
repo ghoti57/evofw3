@@ -701,5 +701,5 @@ void msg_init(void) {
   // Force a version string to be printed
   inCmd = cmd(CMD, NULL,NULL );
   inCmd = cmd('V', NULL,NULL );
-  inCmd = cmd('\n', &cmdBuff, &nCmd );
+  inCmd = cmd('\r', &cmdBuff, &nCmd );
 }
