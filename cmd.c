@@ -81,13 +81,14 @@ uint8_t cmd( uint8_t byte, char **buffer, uint8_t *n ) {
     command.inCmd = 1;
   } else if( command.inCmd ) {
     if( byte=='\r' ) {
-      if( command.n==0 )
+      if( command.n==0 ) {
         command.inCmd = 0;
-    } else if( byte=='\n' ) {
-      command.inCmd = check_command( &command );
-      if( command.inCmd ) {
-        if( buffer ) (*buffer) = command.buffer;
-        if( n ) (*n) = command.n;
+      } else {
+       command.inCmd = check_command( &command );
+        if( command.inCmd ) {
+          if( buffer ) (*buffer) = command.buffer;
+          if( n ) (*n) = command.n;
+        }
       }
     } else if ( byte >= ' ' ) { // Printable chararacter
       if( command.n < TXBUF )
