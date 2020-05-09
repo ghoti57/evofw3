@@ -33,7 +33,7 @@ extern void msg_rx_end( uint8_t nBytes, uint8_t error );
 
 extern void msg_rx_rssi( uint8_t rssi );
 
-extern void msg_init(void);
+extern void msg_init(uint8_t myClass, uint32_t myID );
 extern void msg_work(void);
 
 #endif // _MESSAGE_H_

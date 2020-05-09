@@ -671,6 +671,12 @@ void msg_rx_end( uint8_t nBytes, uint8_t error ) {
   DEBUG_MSG(0);
 }
 
+/********************************************************
+** TX Message scan
+********************************************************/
+static uint8_t  MyClass = 18;
+static uint32_t MyID = 0x4DADA;
+
 /************************************************************************************
 **
 ** msg_work must not block in any of it's activities
@@ -721,7 +727,10 @@ void msg_work(void) {
 ** System startup
 ********************************************************/
 
-void msg_init(void) {
+void msg_init( uint8_t myClass, uint32_t myID ) {
+  MyClass = myClass;
+  MyID = myID;
+
   msg_create_pool();
 
   // Force a version string to be printed

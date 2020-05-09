@@ -17,6 +17,9 @@ void main_init(void) {
   char buff[24];
   uint8_t n;
 
+  uint8_t  myClass = 18;
+  uint32_t myId = 0x4DADA;
+
   // OSCCAL=((uint32_t)OSCCAL * 10368) / 10000;
 
 #if defined(DEBUG_PORT)
@@ -32,7 +35,7 @@ void main_init(void) {
   spi_init();
   cc_init();
   frame_init();
-  msg_init();
+  msg_init( myClass, myId );
 
   sei();
 }
