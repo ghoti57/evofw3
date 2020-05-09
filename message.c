@@ -185,6 +185,8 @@ static struct message *msg_tx_get(void) {
 /********************************************************
 ** Message Header
 ********************************************************/
+static char const * const MsgType[4] = { "RQ", "I","W","RP" };
+
 
 #define F_OPTION ( F_ADDR0 + F_ADDR1 + F_ADDR2 + F_PARAM0 + F_PARAM1 )
 #define F_MAND   ( F_OPCODE + F_LEN )
@@ -245,10 +247,9 @@ static uint8_t msg_print_rssi( char *str, uint8_t rssi, uint8_t valid ) {
 }
 
 static uint8_t msg_print_type( char *str, uint8_t type ) {
-  static char const * const Type[4] = { "RQ ", " I "," W ","RP " };
   uint8_t n = 0;
 
-  n = sprintf( str, Type[type] );
+  n = sprintf( str,"%2s ",MsgType[type] );
 
   return n;
 }
