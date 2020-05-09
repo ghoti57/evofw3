@@ -38,6 +38,24 @@ enum message_state {
   S_ERROR
 };
 
+#define F_MASK  0x03
+#define F_RQ    0x00
+#define F_I     0x01
+#define F_W     0x02
+#define F_RP    0x03
+
+#define F_ADDR0  0x10
+#define F_ADDR1  0x20
+#define F_ADDR2  0x40
+
+#define F_PARAM0 0x04
+#define F_PARAM1 0x08
+#define F_RSSI   0x80
+
+// Only used for received fields
+#define F_OPCODE 0x01
+#define F_LEN    0x02
+
 #define MAX_RAW 162
 #define MAX_PAYLOAD 64
 struct message {
@@ -71,31 +89,102 @@ static void msg_reset( struct message *msg ) {
 }
 
 /********************************************************
+** Message structure pool
+********************************************************/
+#define N_MSG 4
+#define N_POOL ( N_MSG+1 ) // Queues are bigger than total number of messsages so can never be full
+
+static struct message *Msg[N_POOL];
+static uint8_t msgIn=0;
+static uint8_t msgOut=0;
+
+static void msg_free( struct message **msg ) {
+  if( msg!=NULL && (*msg)!=NULL ) {
+    msg_reset( (*msg) );
+
+    Msg[ msgIn ] = (*msg);
+    msgIn = ( msgIn+1 ) % N_POOL;
+
+    (*msg) = NULL;
+  }
+}
+
+static struct message *msg_alloc(void) {
+  struct message *msg = Msg[ msgOut ];
+  if( msg != NULL ) {
+    Msg[msgOut] = NULL;
+    msgOut = ( msgOut+1 )  % N_POOL;
+  }
+
+  return msg;
+}
+
+static void msg_create_pool(void) {
+  static struct message MSG[N_MSG];
+  uint8_t i;
+  for( i=0 ; i<N_MSG ; i++ ) {
+    struct message *msg = MSG+i;
+    msg_free( &msg );
+  }
+}
+
+/********************************************************
+** Received Message list
+********************************************************/
+static struct message *MsgRx[N_POOL];
+static uint8_t msgRxIn=0;
+static uint8_t msgRxOut=0;
+
+static void msg_rx_ready( struct message **msg ) {
+  if( msg!=NULL && (*msg)!=NULL ) {
+    MsgRx[ msgRxIn ] = (*msg);
+    msgRxIn = ( msgRxIn+1 ) % N_POOL;
+    (*msg) = NULL;
+  }
+}
+
+static struct message *msg_rx_get(void) {
+  struct message *msg = MsgRx[ msgRxOut ];
+  if( msg != NULL ) {
+    MsgRx[msgRxOut] = NULL;
+    msgRxOut = ( msgRxOut+1 ) % N_POOL;
+    msg->state = S_START;
+  }
+
+  return msg;
+}
+
+
+/********************************************************
+** Transmit Message list
+********************************************************/
+static struct message *MsgTx[N_POOL];
+static uint8_t msgTxIn=0;
+static uint8_t msgTxOut=0;
+
+static void msg_tx_ready( struct message **msg ) {
+  if( msg!=NULL && (*msg)!=NULL ) {
+    MsgTx[ msgTxIn ] = msg;
+    msgTxIn = ( msgTxIn+1 ) % N_POOL;
+    (*msg) = NULL;
+   }
+}
+
+static struct message *msg_tx_get(void) {
+  struct message *msg = MsgTx[ msgTxOut ];
+  if( msg != NULL ) {
+    MsgTx[msgTxOut] = NULL;
+    msgTxOut = ( msgTxOut+1 ) % N_POOL;
+    msg->state = S_START;
+  }
+
+  return msg;
+}
+
+
+/********************************************************
 ** Message Header
 ********************************************************/
-
-#define F_MASK  0x03
-#define F_RQ    0x00
-#define F_I     0x01
-#define F_W     0x02
-#define F_RP    0x03
-inline uint8_t pkt_type(uint8_t flags) { return flags & F_MASK; }
-inline void set_request(uint8_t *flags)      { *flags = F_RQ; }
-inline void set_information(uint8_t *flags)  { *flags = F_I; }
-inline void set_write(uint8_t *flags)        { *flags = F_W; }
-inline void set_response(uint8_t *flags)     { *flags = F_RP; }
-
-#define F_ADDR0  0x10
-#define F_ADDR1  0x20
-#define F_ADDR2  0x40
-
-#define F_PARAM0 0x04
-#define F_PARAM1 0x08
-#define F_RSSI   0x80
-
-// Only used for received fields
-#define F_OPCODE 0x01
-#define F_LEN    0x02
 
 #define F_OPTION ( F_ADDR0 + F_ADDR1 + F_ADDR2 + F_PARAM0 + F_PARAM1 )
 #define F_MAND   ( F_OPCODE + F_LEN )
@@ -433,59 +522,6 @@ static uint8_t msg_print( struct message *msg ) {
 }
 
 /********************************************************
-** Message structure pool
-********************************************************/
-static struct message *Msg[8];
-static uint8_t msgIn=0;
-static uint8_t msgOut=0;
-
-static void msg_free( struct message **msg ) {
-  if( msg!=NULL && (*msg)!=NULL ) {
-    msg_reset( (*msg) );
-
-    Msg[ msgIn ] = (*msg);
-    msgIn = ( msgIn+1 ) % 8;
-
-    (*msg) = NULL;
-  }
-}
-
-static struct message *msg_alloc(void) {
-  struct message *msg = Msg[ msgOut ];
-  if( msg != NULL ) {
-    Msg[msgOut] = NULL;
-    msgOut = ( msgOut+1 )  % 8;
-  }
-
-  return msg;
-}
-
-/********************************************************
-** Received Message list
-********************************************************/
-static struct message *MsgRx[8];
-static uint8_t msgRxIn=0;
-static uint8_t msgRxOut=0;
-
-static void msg_ready( struct message *msg ) {
-  if( msg != NULL ) {
-    MsgRx[ msgRxIn ] = msg;
-    msgRxIn = ( msgRxIn+1 ) % 8;
-  }
-}
-
-static struct message *msg_get(void) {
-  struct message *msg = MsgRx[ msgRxOut ];
-  if( msg != NULL ) {
-    MsgRx[msgRxOut] = NULL;
-    msgRxOut = ( msgRxOut+1 ) % 8;
-    msg->state = S_START;
-  }
-
-  return msg;
-}
-
-/********************************************************
 ** RX Message processing
 ********************************************************/
 static uint8_t msg_rx_header( struct message *msg, uint8_t byte ) {
@@ -630,9 +666,7 @@ void msg_rx_end( uint8_t nBytes, uint8_t error ) {
   }
 
   msgRx->error = error;
-
-  msg_ready( msgRx );
-  msgRx = NULL;
+  msg_rx_ready( &msgRx );
 
   DEBUG_MSG(0);
 }
@@ -667,7 +701,7 @@ void msg_work(void) {
       inCmd = 0;
   } else {
     // If we have a message now we'll start printing it next time
-    rx = msg_get();
+    rx = msg_rx_get();
   }
 
   // Process serial data from host
@@ -686,14 +720,6 @@ void msg_work(void) {
 /********************************************************
 ** System startup
 ********************************************************/
-static void msg_create_pool(void) {
-  static struct message MSG[4];
-  uint8_t i;
-  for( i=0 ; i< 4; i++ ) {
-    struct message *msg = MSG+i;
-    msg_free( &msg );
-  }
-}
 
 void msg_init(void) {
   msg_create_pool();
