@@ -89,41 +89,56 @@ static void msg_reset( struct message *msg ) {
 }
 
 /********************************************************
-** Message structure pool
+** Message lists
 ********************************************************/
 #define N_MSG 4
-#define N_POOL ( N_MSG+1 ) // Queues are bigger than total number of messsages so can never be full
+#define N_LIST ( N_MSG+1 ) // Queues are bigger than total number of messsages so can never be full
 
-static struct message *Msg[N_POOL];
-static uint8_t msgIn=0;
-static uint8_t msgOut=0;
+struct msg_list {
+  struct message *msg[N_LIST];
+  uint8_t in;
+  uint8_t out;
+};
 
-static void msg_free( struct message **msg ) {
-  if( msg!=NULL && (*msg)!=NULL ) {
-    msg_reset( (*msg) );
+void msg_put( struct msg_list *list, struct message **ppMsg, uint8_t reset ) {
+  if( ppMsg != NULL ) {
+    struct message *pMsg = (*ppMsg);
+      if( pMsg != NULL ) {
 
-    Msg[ msgIn ] = (*msg);
-    msgIn = ( msgIn+1 ) % N_POOL;
+      if( reset )
+        msg_reset( pMsg );
 
-    (*msg) = NULL;
+      list->msg[list->in] = pMsg;
+      list->in = ( list->in + 1 ) % N_LIST;
+      (*ppMsg) = NULL;
+    }
   }
 }
 
-static struct message *msg_alloc(void) {
-  struct message *msg = Msg[ msgOut ];
+static struct message *msg_get( struct msg_list *list ) {
+  struct message *msg = list->msg[ list->out ];
+
   if( msg != NULL ) {
-    Msg[msgOut] = NULL;
-    msgOut = ( msgOut+1 )  % N_POOL;
+    list->msg[list->out] = NULL;
+    list->out = ( list->out+1 ) % N_LIST;
+    msg->state = S_START;
   }
 
   return msg;
 }
 
+/********************************************************
+** Message structure pool
+********************************************************/
+static struct msg_list msg_pool;
+static void msg_free( struct message **msg ) { msg_put( &msg_pool, msg, 1 ); }
+static struct message *msg_alloc(void) {  return msg_get( &msg_pool); }
+
 static void msg_create_pool(void) {
   static struct message MSG[N_MSG];
   uint8_t i;
   for( i=0 ; i<N_MSG ; i++ ) {
-    struct message *msg = MSG+i;
+    struct message *msg = &MSG[i];
     msg_free( &msg );
   }
 }
@@ -131,56 +146,17 @@ static void msg_create_pool(void) {
 /********************************************************
 ** Received Message list
 ********************************************************/
-static struct message *MsgRx[N_POOL];
-static uint8_t msgRxIn=0;
-static uint8_t msgRxOut=0;
-
-static void msg_rx_ready( struct message **msg ) {
-  if( msg!=NULL && (*msg)!=NULL ) {
-    MsgRx[ msgRxIn ] = (*msg);
-    msgRxIn = ( msgRxIn+1 ) % N_POOL;
-    (*msg) = NULL;
-  }
-}
-
-static struct message *msg_rx_get(void) {
-  struct message *msg = MsgRx[ msgRxOut ];
-  if( msg != NULL ) {
-    MsgRx[msgRxOut] = NULL;
-    msgRxOut = ( msgRxOut+1 ) % N_POOL;
-    msg->state = S_START;
-  }
-
-  return msg;
-}
+static struct msg_list rx_list;
+static void msg_rx_ready( struct message **msg ) { msg_put( &rx_list, msg, 0 ); }
+static struct message *msg_rx_get(void) { return msg_get( &rx_list ); }
 
 
 /********************************************************
 ** Transmit Message list
 ********************************************************/
-static struct message *MsgTx[N_POOL];
-static uint8_t msgTxIn=0;
-static uint8_t msgTxOut=0;
-
-static void msg_tx_ready( struct message **msg ) {
-  if( msg!=NULL && (*msg)!=NULL ) {
-    MsgTx[ msgTxIn ] = msg;
-    msgTxIn = ( msgTxIn+1 ) % N_POOL;
-    (*msg) = NULL;
-   }
-}
-
-static struct message *msg_tx_get(void) {
-  struct message *msg = MsgTx[ msgTxOut ];
-  if( msg != NULL ) {
-    MsgTx[msgTxOut] = NULL;
-    msgTxOut = ( msgTxOut+1 ) % N_POOL;
-    msg->state = S_START;
-  }
-
-  return msg;
-}
-
+static struct msg_list tx_list;
+static void msg_tx_ready( struct message **msg ) { msg_put( &tx_list, msg, 0 ); }
+static struct message *msg_tx_get(void) {  return msg_get( &tx_list ); }
 
 /********************************************************
 ** Message Header
@@ -678,6 +654,204 @@ void msg_rx_end( uint8_t nBytes, uint8_t error ) {
 static uint8_t  MyClass = 18;
 static uint32_t MyID = 0x4DADA;
 
+static uint8_t msg_scan_header( struct message *msg, char *str, uint8_t nChar ) {
+  uint8_t msgType;
+
+  // Cheap conversion to upper for acceptable characters
+  while( --nChar )
+    str[ nChar-1 ] &= ~( 'A'^'a' );
+
+  for( msgType=F_RQ ; msgType<=F_RP ; msgType++ ) {
+    if( !strcmp( str, MsgType[msgType] ) ) {
+      msg->fields = msgType;
+      break;
+    }
+  }
+
+  return msg_print_type( str, msg->fields );
+}
+
+static uint8_t msg_scan_addr( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+  uint8_t ok = 0;
+  uint8_t addr = msg->state - S_ADDR0;
+  uint8_t class;
+  uint32_t id;
+
+  if( str[0]!='-' && 2 == sscanf( str, "%hhu:%lu", &class, &id ) ) {
+    // Specific address for this device
+    if( class==18 && id ==730 ) {
+      class = MyClass;
+      id = MyID;
+    }
+
+    msg->addr[addr][0] = ( class<< 2 ) | ( ( id >> 16 ) & 0x03 );
+    msg->addr[addr][1] =                 ( ( id >>  8 ) & 0xFF );
+    msg->addr[addr][2] =                 ( ( id       ) & 0xFF );
+
+    msg->fields |= F_ADDR0 << addr;
+    ok = 1;
+
+    msg->csum += msg->addr[addr][0] + msg->addr[addr][1] + msg->addr[addr][2];
+  }
+
+  return msg_print_addr( str, msg->addr[addr], ok );
+}
+
+static uint8_t msg_scan_param( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+  uint8_t ok = 0;
+  uint8_t param = msg->state - S_PARAM0;
+
+  if( str[0]!='-' && 1 == sscanf( str, "%hhu", msg->param+param ) ) {
+    msg->fields |= F_PARAM0 << param;
+    ok = 1;
+
+    msg->csum += msg->param[param];
+  }
+
+  return msg_print_param( str, msg->param[param], ok );
+}
+
+static uint8_t msg_scan_opcode( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+  uint8_t ok = 0;
+
+  if( str[0]!='-' && 2 == sscanf( str, "%02hhx%02hhx", msg->opcode+0,msg->opcode+1 )  ) {
+    msg->rxFields |= F_OPCODE;
+    ok = 1;
+
+    msg->csum += msg->opcode[0] + msg->opcode[1];
+  }
+
+  return msg_print_opcode( str, msg->opcode, ok );
+}
+
+static uint8_t msg_scan_len( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+  uint8_t ok = 0;
+
+  if( str[0]!='-' && 1 == sscanf( str, "%hhu", &msg->len ) ) {
+    if( msg->len > 0 && msg->len <= MAX_PAYLOAD )
+    {
+      msg->rxFields |= F_LEN;
+      ok = 1;
+
+      msg->csum += msg->len;
+    }
+  }
+
+  return msg_print_len( str, msg->len, ok );
+}
+
+static uint8_t msg_scan_payload( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+
+  if( 1 == sscanf( str, "%02hhx", msg->payload+msg->nPayload ) )
+  {
+    msg->csum += msg->payload[msg->nPayload];
+    return msg_print_payload( str, msg->payload[msg->nPayload] );
+  }
+  else
+    return sprintf( str,"??" );
+}
+
+static uint8_t msg_scan( struct message *msg, uint8_t byte) {
+  static char field[17];
+  static uint8_t nChar;
+
+  if( byte=='\r' ) {
+    // Ignore blank line
+    if( msg->state==S_START && nChar==0 )
+      return 0;
+
+    // Didn't get a sensible message
+    if( msg->state != S_CHECKSUM ) {
+      nChar = 0;
+      msg_reset( msg ); // Discard
+      return 0;
+    } else {
+      byte = '\0';
+    }
+  }
+
+  // Discard to end of line
+  if( msg->state == S_ERROR )
+    return 0;
+
+  if( byte==' ' ) {
+    // Discard leading spaces
+    if( nChar==0 )
+      return 0;
+
+    // Terminate field
+    byte = '\0';
+  }
+  field[ nChar++ ] = (char)byte;
+
+  // No spaces between PAYLOAD bytes
+  if( byte && msg->state == S_PAYLOAD ) {
+    if( nChar==2 ) {
+      field[nChar++] = '\0';
+
+      msg_scan_payload( msg, field, nChar );
+      msg->nPayload++;
+
+      nChar = 0;
+
+      if( msg->nPayload == msg->len ) {
+        msg->state = S_CHECKSUM;
+      }
+
+    } else { // wait for second byte
+      return 0;
+    }
+  }
+
+  if( !byte ) {
+    switch( msg->state ) {
+    case S_START: /* fall through */
+    case S_HEADER:      msg_scan_header( msg, field, nChar ); msg->state = S_PARAM0;   break;
+    case S_ADDR0:       msg_scan_addr( msg, field, nChar );   msg->state = S_ADDR1;    break;
+    case S_ADDR1:       msg_scan_addr( msg, field, nChar );   msg->state = S_ADDR2;    break;
+    case S_ADDR2:       msg_scan_addr( msg, field, nChar );   msg->state = S_OPCODE;   break;
+    case S_PARAM0:      msg_scan_param( msg, field, nChar );  msg->state = S_ADDR0;    break;
+//    case S_PARAM1:
+    case S_OPCODE:      msg_scan_opcode( msg, field, nChar ); msg->state = S_LEN;      break;
+    case S_LEN:         msg_scan_len( msg, field, nChar );    msg->state = S_PAYLOAD;  break;
+    case S_PAYLOAD:                                           msg->state = S_ERROR;    break;
+    case S_CHECKSUM:    msg->state = ( nChar!=1 ) ? S_ERROR : S_COMPLETE;              break;
+//  case S_TRAILER:
+//  case S_COMPLETE:
+//  case S_ERROR:
+    }
+    nChar = 0;
+  }
+
+  if( msg->state==S_PAYLOAD ) {
+    if( ( msg->rxFields & F_MAND ) != F_MAND ) {
+      msg->state = S_ERROR;
+    }
+  }
+
+  if( msg->state==S_COMPLETE ) {
+    msg->csum += get_header(msg->fields);
+    msg->csum = -msg->csum;
+    msg->rxFields |= msg->fields;
+    return 1;
+  }
+
+  return 0;
+}
+
+/********************************************************
+** TX Message
+********************************************************/
+
+void msg_tx_done( struct message **msg ) {
+  // Make sure there's an RSSI value to print
+  (*msg)->rxFields |= F_RSSI;
+  (*msg)->rssi = 0;
+
+  // Echo what we transmitted
+  msg_rx_ready( msg );
+}
+
 /************************************************************************************
 **
 ** msg_work must not block in any of it's activities
@@ -719,9 +893,26 @@ void msg_work(void) {
     if( !tx || tx->state==S_START ) {
       if( !nCmd && ( byte==CMD || inCmd ) ) {
         inCmd = cmd( byte, &cmdBuff, &nCmd );
+        byte = '\0'; // byte has been used
       }
     }
   }
+
+  if( byte ) {  // Still have an unused byte
+    if( tx ) { // TX message
+        if( msg_scan( tx, byte ) ) {
+          msg_tx_ready( &tx );
+      }
+    }
+  }
+
+  // TEST ONLY - echo tx command without transmitting it
+  if( !tx ) {
+    tx = msg_tx_get();
+    if( tx )
+      msg_tx_done( &tx );
+  }
+
 }
 
 /********************************************************
