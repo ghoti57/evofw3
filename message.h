@@ -30,8 +30,11 @@ enum msg_err_code { MSG_OK=0, _MSG_ERR_LIST MSG_ERR_MAX };
 extern uint8_t *msg_rx_start(void);
 extern uint8_t msg_rx_byte(uint8_t byte);
 extern void msg_rx_end( uint8_t nBytes, uint8_t error );
-
 extern void msg_rx_rssi( uint8_t rssi );
+
+extern uint8_t msg_tx_byte(uint8_t *done);
+extern void msg_tx_end( uint8_t nBytes );
+extern void msg_tx_done(void);
 
 extern void msg_init(uint8_t myClass, uint32_t myID );
 extern void msg_work(void);

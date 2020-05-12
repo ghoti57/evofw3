@@ -842,14 +842,180 @@ static uint8_t msg_scan( struct message *msg, uint8_t byte) {
 /********************************************************
 ** TX Message
 ********************************************************/
+static uint8_t msg_tx_header( struct message *msg, uint8_t *done ) {
+  uint8_t byte = 0;
 
-void msg_tx_done( struct message **msg ) {
-  // Make sure there's an RSSI value to print
-  (*msg)->rxFields |= F_RSSI;
-  (*msg)->rssi = 0;
+  if( msg->count < 1 ) {
+    byte = get_header( msg->fields );
+    msg->count++;
+  } else {
+    msg->count = 0;
+  }
 
-  // Echo what we transmitted
-  msg_rx_ready( msg );
+  (*done) = (msg->count) ? 0:1;
+
+  return byte;
+}
+
+static uint8_t msg_tx_addr( struct message *msg, uint8_t *done ) {
+  uint8_t byte = 0;
+  uint8_t addr = msg->state - S_ADDR0;
+
+  if( msg->fields & ( F_ADDR0 << addr ) ) {
+    if( msg->count < 3 ) {
+      byte = msg->addr[ addr ][ msg->count ];
+      msg->count++;
+    } else {
+      msg->count = 0;
+    }
+  }
+
+  (*done) = (msg->count) ? 0:1;
+
+  return byte;
+}
+
+static uint8_t msg_tx_param( struct message *msg, uint8_t *done  ) {
+  uint8_t byte = 0;
+  uint8_t param = msg->state - S_PARAM0;
+
+  if( msg->fields & ( F_PARAM0 << param ) ) {
+    if( msg->count < 1 ) {
+      byte = msg->param[ param ];
+      msg->count++;
+    } else {
+      msg->count = 0;
+    }
+  }
+
+  (*done) = (msg->count) ? 0:1;
+
+  return byte;
+}
+
+static uint8_t msg_tx_opcode( struct message *msg, uint8_t *done ) {
+  uint8_t byte = 0;
+
+  if( msg->count < 2 ) {
+    byte = msg->opcode[ msg->count ];
+    msg->count++;
+  } else {
+    msg->count = 0;
+  }
+
+  (*done) = (msg->count) ? 0:1;
+
+  return byte;
+}
+
+static uint8_t msg_tx_len( struct message *msg, uint8_t *done ) {
+  uint8_t byte = 0;
+
+  if( msg->count < 1 ) {
+    byte = msg->len;
+    msg->count++;
+  } else {
+    msg->count = 0;
+  }
+
+  (*done) = (msg->count) ? 0:1;
+
+  return byte;
+}
+
+static uint8_t msg_tx_payload( struct message *msg, uint8_t *done ) {
+  uint8_t byte = 0;
+
+  if( msg->count < msg->len ) {
+    byte = msg->payload[ msg->count ];
+    msg->count++;
+  } else {
+    msg->count = 0;
+  }
+
+  (*done) = (msg->count) ? 0:1;
+
+  return byte;
+}
+
+static uint8_t msg_tx_checksum( struct message *msg, uint8_t *done ) {
+  uint8_t byte = 0;
+
+  if( msg->count < 1 ) {
+    byte = msg->csum;
+    msg->count++;
+  } else {
+    msg->count = 0;
+  }
+
+  (*done) = (msg->count) ? 0:1;
+
+  return byte;
+}
+
+static uint8_t msg_tx_process( struct message *msg, uint8_t *done ) {
+  uint8_t byte = 0, d;
+
+  switch( msg->state ) {
+  case S_START:
+  case S_HEADER:     byte = msg_tx_header(msg,&d);    if( !d )break; msg->state = S_ADDR0;    /* fall through */
+  case S_ADDR0:      byte = msg_tx_addr(msg,&d);      if( !d )break; msg->state = S_ADDR1;    /* fall through */
+  case S_ADDR1:      byte = msg_tx_addr(msg,&d);      if( !d )break; msg->state = S_ADDR2;    /* fall through */
+  case S_ADDR2:      byte = msg_tx_addr(msg,&d);      if( !d )break; msg->state = S_PARAM0;   /* fall through */
+  case S_PARAM0:     byte = msg_tx_param(msg,&d);     if( !d )break; msg->state = S_PARAM1;   /* fall through */
+  case S_PARAM1:     byte = msg_tx_param(msg,&d);     if( !d )break; msg->state = S_OPCODE;   /* fall through */
+  case S_OPCODE:     byte = msg_tx_opcode(msg,&d);    if( !d )break; msg->state = S_LEN;      /* fall through */
+  case S_LEN:        byte = msg_tx_len(msg,&d);       if( !d )break; msg->state = S_PAYLOAD;  /* fall through */
+  case S_PAYLOAD:    byte = msg_tx_payload(msg,&d);   if( !d )break; msg->state = S_CHECKSUM; /* fall through */
+  case S_CHECKSUM:   byte = msg_tx_checksum(msg,&d);  if( !d )break; msg->state = S_COMPLETE; /* fall through */
+  case S_TRAILER:
+  case S_COMPLETE:
+  case S_ERROR:
+    break;
+  }
+
+  (*done) = d;
+
+  return byte;
+}
+
+
+static struct message *TxMsg;
+static void msg_tx_start( struct message **msg ) {
+  if( msg && (*msg) ) {
+    TxMsg = (*msg);
+    frame_tx_start( TxMsg->raw, MAX_RAW );
+    (*msg) = NULL;
+  }
+}
+
+uint8_t msg_tx_byte(uint8_t *done) {
+  uint8_t byte ;
+
+  if( TxMsg ) {
+    byte = msg_tx_process( TxMsg, done );
+  } else {
+    *done = 1;
+  }
+
+  return byte;
+}
+
+void msg_tx_end( uint8_t nBytes ) {
+  if( TxMsg ) {
+    TxMsg->nBytes = nBytes;
+  }
+}
+
+void msg_tx_done(void) {
+  if( TxMsg ) {
+    // Make sure there's an RSSI value to print
+    TxMsg->rxFields |= F_RSSI;
+    TxMsg->rssi = 0;
+
+    // Echo what we transmitted
+    msg_rx_ready( &TxMsg );
+  }
 }
 
 /************************************************************************************
@@ -906,11 +1072,10 @@ void msg_work(void) {
     }
   }
 
-  // TEST ONLY - echo tx command without transmitting it
-  if( !tx ) {
-    tx = msg_tx_get();
-    if( tx )
-      msg_tx_done( &tx );
+  if( !TxMsg ) {
+    struct message *tx1 = msg_tx_get();
+    if( tx1 )
+      msg_tx_start( &tx1 );
   }
 
 }
