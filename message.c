@@ -191,45 +191,49 @@ static char const * const MsgType[4] = { "RQ", "I","W","RP" };
 #define F_OPTION ( F_ADDR0 + F_ADDR1 + F_ADDR2 + F_PARAM0 + F_PARAM1 )
 #define F_MAND   ( F_OPCODE + F_LEN )
 
-static const uint8_t header_flags[16] = {
-  F_RQ + F_ADDR0+F_ADDR1+F_ADDR2 ,
-  F_RQ +                 F_ADDR2 ,
-  F_RQ + F_ADDR0+        F_ADDR2 ,
-  F_RQ + F_ADDR0+F_ADDR1         ,
-  F_I  + F_ADDR0+F_ADDR1+F_ADDR2 ,
-  F_I  +                 F_ADDR2 ,
-  F_I  + F_ADDR0+        F_ADDR2 ,
-  F_I  + F_ADDR0+F_ADDR1         ,
-  F_W  + F_ADDR0+F_ADDR1+F_ADDR2 ,
-  F_W  +                 F_ADDR2 ,
-  F_W  + F_ADDR0+        F_ADDR2 ,
-  F_W  + F_ADDR0+F_ADDR1         ,
-  F_RP + F_ADDR0+F_ADDR1+F_ADDR2 ,
-  F_RP +                 F_ADDR2 ,
-  F_RP + F_ADDR0+        F_ADDR2 ,
-  F_RP + F_ADDR0+F_ADDR1         ,
+static const uint8_t address_flags[4] = {
+  F_ADDR0+F_ADDR1+F_ADDR2 ,
+                  F_ADDR2 ,
+  F_ADDR0+        F_ADDR2 ,
+  F_ADDR0+F_ADDR1
 };
 
+#define HDR_T_MASK 0x30
+#define HDR_T_SHIFT   4
+#define HDR_A_MASK 0x0C
+#define HDR_A_SHIFT   2
+#define HDR_PARAM0 0x02
+#define HDR_PARAM1 0x01
+
 static uint8_t get_hdr_flags(uint8_t header ) {
-  return header_flags[ ( header>>2 ) & 0x0F ];
+  uint8_t flags;
+
+  flags = ( header & HDR_T_MASK ) >> 4;   // Message type
+  flags |= address_flags[ ( header & HDR_A_MASK ) >> HDR_A_SHIFT ];
+  if( header & HDR_PARAM0 ) flags |= F_PARAM0;
+  if( header & HDR_PARAM1 ) flags |= F_PARAM1;
+
+  return flags;
 }
 
 static uint8_t get_header( uint8_t flags ) {
   uint8_t i;
 
-  for( i=0 ; i<sizeof(header_flags) ; i++ ) {
-    if( flags==header_flags[i] )
+  uint8_t header = 0xFF;
+  uint8_t addresses = flags & ( F_ADDR0+F_ADDR1+F_ADDR2 );
+
+  for( i=0 ; i<sizeof(address_flags) ; i++ ) {
+    if( addresses==address_flags[i] ) {
+      header = i << HDR_A_SHIFT;
+      header |= ( flags & F_MASK ) << HDR_T_SHIFT;  // Message type
+      if( flags & F_PARAM0 ) header |= HDR_PARAM0;
+      if( flags & F_PARAM1 ) header |= HDR_PARAM1;
       break;
+    }
   }
 
-  return i<<2;  // Will return 0x40 if not found
+  return header;
 }
-
-#define HDR_PARAM0 0x02
-#define HDR_PARAM1 0x01
-
-inline uint8_t hdr_param0(uint8_t header)    { return header & HDR_PARAM0; }
-inline uint8_t hdr_param1(uint8_t header)    { return header & HDR_PARAM1; }
 
 /********************************************************
 ** Message Print
