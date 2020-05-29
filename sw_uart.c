@@ -133,7 +133,7 @@ static uint8_t rx_high( uint8_t interval ) {
 
 //-----------------------------------------------------------------------------
 // check low signals
-static uint8_t rx_low( uint8_t interval ) {
+static uint8_t rx_low( uint8_t interval __attribute__((unused))) {
   uint8_t state = RX_LOW;    // Stay here until we see a HIGH
 
   if( rx.level ) { // rising edge
@@ -160,7 +160,7 @@ static uint8_t rx_sync1( uint8_t interval ) {
 
 //-----------------------------------------------------------------------------
 // wait for end of STOP BIT
-static uint8_t rx_stop_bit( uint8_t interval ) {
+static uint8_t rx_stop_bit( uint8_t interval __attribute__((unused))) {
   uint8_t state = RX_STOP;  // Stay here until we see a LOW
 
   if( !rx.level ) { // falling edge

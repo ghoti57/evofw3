@@ -24,12 +24,12 @@ static void reset_command(void) {
 
 //------------------------------------------------------------------------
 
-static uint8_t get_hex( uint8_t len, uint8_t *param ) {
+static uint8_t get_hex( uint8_t len, char *param ) {
   uint8_t value = 0;
 
   if( len > 2 ) len = 2;
   while( len ) {
-    uint8_t p = *(param++);
+    char p = *(param++);
     len--;
     value <<= 4;
     value += ( p>='0' && p<='9' ) ? p - '0'
@@ -54,7 +54,7 @@ static uint8_t cmd_trace( struct cmd *cmd ) {
 
 //------------------------------------------------------------------------
 
-static uint8_t cmd_version( struct cmd *cmd ) {
+static uint8_t cmd_version( struct cmd *cmd __attribute__((unused))) {
   // There are no parameters
   command.n = sprintf( command.buffer, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
   return 1;

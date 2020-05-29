@@ -162,14 +162,16 @@ static struct message *MsgTx[N_POOL];
 static uint8_t msgTxIn=0;
 static uint8_t msgTxOut=0;
 
+static void msg_tx_ready( struct message **msg ) __attribute__((unused));
 static void msg_tx_ready( struct message **msg ) {
   if( msg!=NULL && (*msg)!=NULL ) {
-    MsgTx[ msgTxIn ] = msg;
+    MsgTx[ msgTxIn ] = (*msg);
     msgTxIn = ( msgTxIn+1 ) % N_POOL;
     (*msg) = NULL;
    }
 }
 
+static struct message *msg_tx_get(void) __attribute__((unused));
 static struct message *msg_tx_get(void) {
   struct message *msg = MsgTx[ msgTxOut ];
   if( msg != NULL ) {
@@ -216,6 +218,8 @@ static uint8_t get_hdr_flags(uint8_t header ) {
   return flags;
 }
 
+
+static uint8_t get_header( uint8_t flags ) __attribute__((unused));
 static uint8_t get_header( uint8_t flags ) {
   uint8_t i;
 
@@ -599,7 +603,7 @@ static uint8_t msg_rx_payload( struct message *msg, uint8_t byte ) {
   return state;
 }
 
-static uint8_t msg_rx_checksum( struct message *msg, uint8_t byte ) {
+static uint8_t msg_rx_checksum( struct message *msg, uint8_t byte __attribute__((unused))) {
   uint8_t state = S_COMPLETE;
 
   if( msg->csum != 0 && !msg->error )
@@ -692,7 +696,7 @@ static uint32_t MyID = 0x4DADA;
 **/
 
 static uint8_t inCmd;
-static uint8_t *cmdBuff;
+static char *cmdBuff;
 static uint8_t nCmd;
 
 void msg_work(void) {
@@ -707,7 +711,7 @@ void msg_work(void) {
       msg_free( &rx );
     }
   } else if( nCmd ) {
-    nCmd -= tty_put_str( cmdBuff, nCmd );
+    nCmd -= tty_put_str( (uint8_t *)cmdBuff, nCmd );
     if( !nCmd )
       inCmd = 0;
   } else {
