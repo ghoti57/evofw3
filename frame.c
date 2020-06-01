@@ -2,6 +2,7 @@
 #include <util/delay.h>
 
 #include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 
 #include "config.h"
 #include "message.h"
@@ -59,33 +60,35 @@ static void frame_reset(void) {
 */
 
 // Convert big-endian 4 bits to little-endian byte
-static uint8_t const man_encode[16] = {
+static uint8_t const man_encode[16] PROGMEM = {
   0xAA, 0xA9, 0xA6, 0xA5,  0x9A, 0x99, 0x96, 0x95,
   0x6A, 0x69, 0x66, 0x65,  0x5A, 0x59, 0x56, 0x55
 };
+#define MAN_ENCODE(_i) pgm_read_byte( man_encode+(_i) )
 
 // Convert little-endian 4 bits to 2-bit big endian
-static uint8_t man_decode[16] = {
+static uint8_t const man_decode[16] PROGMEM = {
   0xF, 0xF, 0xF, 0xF, 0xF, 0x3, 0x2, 0xF,
   0xF, 0x1, 0x0, 0xF, 0xF, 0xF, 0xF, 0xF
 };
+#define MAN_DECODE(_i) pgm_read_byte( man_decode+(_i) )
 
 static inline int manchester_code_valid( uint8_t code ) {
- return ( man_decode[(code>>4)&0xF]!=0xF ) && ( man_decode[(code   )&0xF]!=0xF ) ;
+ return ( MAN_DECODE( (code>>4)&0xF )!=0xF ) && ( MAN_DECODE( (code   )&0xF )!=0xF ) ;
 }
 
 static inline uint8_t manchester_decode( uint8_t byte ) {
   uint8_t decoded;
 
-  decoded  = man_decode[( byte    ) & 0xF ];
-  decoded |= man_decode[( byte>>4 ) & 0xF ]<<2;
+  decoded  = MAN_DECODE( ( byte    ) & 0xF );
+  decoded |= MAN_DECODE( ( byte>>4 ) & 0xF )<<2;
 
   return decoded;
 }
 
 static inline void manchester_encode( uint8_t value, uint8_t *byte1, uint8_t *byte2 ) {
-  *byte1 = man_encode[ ( value >> 4 ) & 0xF ];
-  *byte2 = man_encode[ ( value      ) & 0xF ];
+  *byte1 = MAN_ENCODE( ( value >> 4 ) & 0xF );
+  *byte2 = MAN_ENCODE( ( value      ) & 0xF );
 }
 
 /***********************************************************************************
