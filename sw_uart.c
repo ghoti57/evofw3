@@ -14,6 +14,7 @@
 #include <avr/interrupt.h>
 
 #include "frame.h"
+#include "uart.h"
 
 #define DEBUG_ISR(_v)      DEBUG1(_v)
 #define DEBUG_EDGE(_v)     DEBUG2(_v)
@@ -61,6 +62,8 @@ enum uart_rx_states {
   RX_SYNCH0,  // Clock recovery
 };
 
+
+#define MAX_EDGE 24
 static struct uart_rx_state {
   uint16_t time;
   uint16_t lastTime;
@@ -77,7 +80,7 @@ static struct uart_rx_state {
   uint8_t lastByte;
 
   // Edge buffers
-  uint8_t Edges[2][24];
+  uint8_t Edges[2][MAX_EDGE];
   uint8_t NEdges[2];
 
   // Current edges
@@ -197,21 +200,25 @@ static uint8_t rx_abort(uint8_t code) {
 static uint8_t rx_synch(uint8_t interval) {
   uint8_t state = RX_SYNCH;
 
-  rx.edges[rx.nEdges++] = interval;
+  if( rx.nEdges < MAX_EDGE ) {
+    rx.edges[rx.nEdges++] = interval;
 
-  if( interval>TEN_BITS_MIN ) {
-    if( interval < STOP_BITS_MAX ) { // Possible stop bit
-      if( !rx.level ) { // Was a falling edge so probably valid stop bit
-        rx_byte();
-        state = RX_SYNCH0;
-      } else { // Lost BYTE synch
+    if( interval>TEN_BITS_MIN ) {
+      if( interval < STOP_BITS_MAX ) { // Possible stop bit
+        if( !rx.level ) { // Was a falling edge so probably valid stop bit
+          rx_byte();
+          state = RX_SYNCH0;
+        } else { // Lost BYTE synch
+          state = rx_abort(FRM_LOST_SYNC);
+        }
+      } else { // lost BYTE synch
         state = rx_abort(FRM_LOST_SYNC);
       }
-    } else { // lost BYTE synch
-      state = rx_abort(FRM_LOST_SYNC);
+    } else if( rx.lastByte==0x35 ) {
+      state = RX_IDLE;
     }
-  } else if( rx.lastByte==0x35 ) {
-    state = RX_IDLE;
+  } else { // Too many edges
+    state = rx_abort(FRM_LOST_SYNC);
   }
 
   return state;
@@ -270,6 +277,8 @@ ISR(GDO0_INT_VECT) {
 
   if( rx.level != rx.lastLevel ) {
     uint16_t interval;
+    uint8_t synch;
+
     if( rx.overflow && ( ( rx.overflow > 1 ) || ( rx.time > rx.time0 ) ) ) {
         interval = 255;
     } else {
@@ -278,7 +287,7 @@ ISR(GDO0_INT_VECT) {
     }
     rx.overflow = 0;
 
-    uint8_t synch = rx_edge( interval );
+    synch = rx_edge( interval );
     if( synch ) rx.time0 = rx.time;
     rx.lastLevel = rx.level;
     rx.lastTime  = rx.time;
@@ -287,7 +296,7 @@ ISR(GDO0_INT_VECT) {
   DEBUG_ISR(0);
 }
 
-ISR(TIMER1_OVF_VECTOR) {
+ISR(TIMER1_OVF_vect) {
   rx.overflow += 1;
 }
 
