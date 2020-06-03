@@ -9,6 +9,6 @@
 
 #define MAJOR  0
 #define MINOR  3
-#define SUBVER 5
+#define SUBVER 6
 
 #endif // _VERSION_H_
