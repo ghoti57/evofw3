@@ -58,7 +58,7 @@ static uint8_t cmd_trace( struct cmd *cmd ) {
 
 static uint8_t cmd_version( struct cmd *cmd __attribute__((unused))) {
   // There are no parameters
-  command.n = sprintf( command.buffer, PSTR("# %s %d.%d.%d\r\n"),BRANCH,MAJOR,MINOR,SUBVER);
+  command.n = sprintf_P( command.buffer, PSTR("# %s %d.%d.%d\r\n"),BRANCH,MAJOR,MINOR,SUBVER);
   return 1;
 }
 
