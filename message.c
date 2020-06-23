@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 
 #include "config.h"
 #include "tty.h"
@@ -219,9 +220,9 @@ static uint8_t msg_print_rssi( char *str, uint8_t rssi, uint8_t valid ) {
   uint8_t n = 0;
 
   if( valid ) {
-    n = sprintf(str, "%03u ", rssi );
+    n = sprintf_P(str, PSTR("%03u "), rssi );
   } else {
-    n = sprintf(str, "--- ");
+    n = sprintf_P(str, PSTR("--- "));
   }
 
   return n;
@@ -230,7 +231,7 @@ static uint8_t msg_print_rssi( char *str, uint8_t rssi, uint8_t valid ) {
 static uint8_t msg_print_type( char *str, uint8_t type ) {
   uint8_t n = 0;
 
-  n = sprintf( str,"%2s ",MsgType[type] );
+ n = sprintf_P( str,PSTR("%2s "),MsgType[type] );
 
   return n;
 }
@@ -244,9 +245,9 @@ static uint8_t msg_print_addr( char *str, uint8_t *addr, uint8_t valid ) {
                  | (uint32_t)( addr[1]        ) <<  8
                  | (uint32_t)( addr[2]        )       ;
 
-    n = sprintf(str, "%02hu:%06lu ", class, dev );
+    n = sprintf_P(str, PSTR("%02hu:%06lu "), class, dev );
   } else {
-    n = sprintf(str, "--:------ ");
+    n = sprintf_P(str, PSTR("--:------ "));
   }
 
   return n;
@@ -256,9 +257,9 @@ static uint8_t msg_print_param( char *str, uint8_t param, uint8_t valid ) {
   uint8_t n = 0;
 
   if( valid ) {
-    n = sprintf(str, "%03u ", param );
+    n = sprintf_P(str, PSTR("%03u "), param );
   } else {
-    n = sprintf(str, "--- ");
+    n = sprintf_P(str, PSTR("--- "));
   }
 
   return n;
@@ -268,9 +269,9 @@ static uint8_t msg_print_opcode( char *str, uint8_t *opcode, uint8_t valid ) {
   uint8_t n = 0;
 
   if( valid ) {
-    n = sprintf( str, "%02X%02X ", opcode[0],opcode[1] );
+    n = sprintf_P( str, PSTR("%02X%02X "), opcode[0],opcode[1] );
   } else {
-    n= sprintf(str, "???? ");
+    n= sprintf_P(str, PSTR("???? "));
   }
 
   return n;
@@ -280,9 +281,9 @@ static uint8_t msg_print_len( char *str, uint8_t len, uint8_t valid ) {
   uint8_t n = 0;
 
   if( valid ) {
-    n = sprintf(str, "%03u ", len );
+    n = sprintf_P(str, PSTR("%03u "), len );
   } else {
-    n = sprintf(str, "??? ");
+    n = sprintf_P(str, PSTR("??? "));
   }
 
   return n;
@@ -291,33 +292,41 @@ static uint8_t msg_print_len( char *str, uint8_t len, uint8_t valid ) {
 static uint8_t msg_print_payload( char *str, uint8_t payload ) {
   uint8_t n=0;
 
-  n = sprintf( str,"%02X",payload );
+  n = sprintf_P( str,PSTR("%02X"),payload );
 
   return n;
 }
 
 
 static uint8_t msg_print_error( char *str, uint8_t error ) {
-#define _MSG_ERR(_e,_t) , _t
-  static char const *const msg_err[MSG_ERR_MAX] = { "" _MSG_ERR_LIST };
+  static char const msg_err_OK[] PROGMEM = "" ;
+  static char const msg_err_UNKNOWN[] PROGMEM = "UNKNOWN" ;
+#define _MSG_ERR(_e,_t) static char const msg_err_ ## _e[] PROGMEM = _t ;
+  _MSG_ERR_LIST
 #undef _MSG_ERR
-    uint8_t n;
+#define _MSG_ERR(_e,_t) , msg_err_ ## _e
+  static char const *const msg_err[MSG_ERR_MAX+1] = { msg_err_OK _MSG_ERR_LIST, msg_err_UNKNOWN };
+#undef _MSG_ERR
 
-    if( error )
-      n = sprintf( str," * %s\r\n", ( error < MSG_ERR_MAX ) ? msg_err[error] : "UNKNOWN" );
-    else
-      n = sprintf( str,"\r\n" );
+  uint8_t n;
 
-    return n;
+  if( error ) {
+    if( error>MSG_ERR_MAX ) error = MSG_ERR_MAX;
+    n = sprintf_P( str, PSTR(" * %S\r\n"), (PGM_P)pgm_read_word( msg_err + error ) );
+  } else {
+    n = sprintf_P(str,PSTR("\r\n"));
   }
+
+  return n;
+}
 
 static uint8_t msg_print_raw( char *str, uint8_t raw, uint8_t i ) {
   uint8_t n = 0;
 
   if( i )
-    n = sprintf( str,"%02X.",raw );
+    n = sprintf_P( str,PSTR("%02X."),raw );
   else
-    n = sprintf( str,"# %02X.",raw );
+    n = sprintf_P( str,PSTR("# %02X."),raw );
 
   return n;
 }
@@ -416,7 +425,7 @@ static uint8_t msg_print_field( struct message *msg, char *buff ) {
         nBytes = msg_print_raw( buff, msg->raw[msg->count], msg->count );
         msg->count++;
       } else if( msg->nBytes ) {
-        nBytes = sprintf( buff, "\r\n" );
+        nBytes = sprintf_P( buff, PSTR("\r\n") );
         msg->state = S_COMPLETE;
       }
       if( nBytes )

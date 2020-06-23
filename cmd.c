@@ -4,6 +4,8 @@
 ** Debug command processing
 **
 ********************************************************/
+#include <avr/pgmspace.h>
+
 #include <string.h>
 #include <stdio.h>
 
@@ -47,7 +49,7 @@ static uint8_t cmd_trace( struct cmd *cmd ) {
   if( cmd->n > 1 )
     trace0 = get_hex( cmd->n-1, cmd->buffer+1 );
 
-  command.n = sprintf( command.buffer, "# !T=%02x\r\n",trace0);
+  command.n = sprintf_P( command.buffer, PSTR("# !T=%02x\r\n"),trace0);
 
   return 1;
 }
@@ -56,7 +58,7 @@ static uint8_t cmd_trace( struct cmd *cmd ) {
 
 static uint8_t cmd_version( struct cmd *cmd __attribute__((unused))) {
   // There are no parameters
-  command.n = sprintf( command.buffer, "# %s %d.%d.%d\r\n",BRANCH,MAJOR,MINOR,SUBVER);
+  command.n = sprintf( command.buffer, PSTR("# %s %d.%d.%d\r\n"),BRANCH,MAJOR,MINOR,SUBVER);
   return 1;
 }
 
