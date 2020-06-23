@@ -305,7 +305,7 @@ static uint8_t msg_print_error( char *str, uint8_t error ) {
   _MSG_ERR_LIST
 #undef _MSG_ERR
 #define _MSG_ERR(_e,_t) , msg_err_ ## _e
-  static char const *const msg_err[MSG_ERR_MAX+1] = { msg_err_OK _MSG_ERR_LIST, msg_err_UNKNOWN };
+  static char const *const msg_err[MSG_ERR_MAX+1] PROGMEM = { msg_err_OK _MSG_ERR_LIST, msg_err_UNKNOWN };
 #undef _MSG_ERR
 
   uint8_t n;
@@ -1109,3 +1109,4 @@ void msg_init( uint8_t myClass, uint32_t myID ) {
   inCmd = cmd('V', NULL,NULL );
   inCmd = cmd('\r', &cmdBuff, &nCmd );
 }
+
