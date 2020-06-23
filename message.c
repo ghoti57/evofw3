@@ -15,6 +15,7 @@
 #include "trace.h"
 #include "cmd.h"
 
+#include "frame.h"
 #include "message.h"
 
 #define DEBUG_MSG(_v) DEBUG4(_v)
@@ -1004,7 +1005,7 @@ static void msg_tx_start( struct message **msg ) {
 }
 
 uint8_t msg_tx_byte(uint8_t *done) {
-  uint8_t byte ;
+  uint8_t byte=0x00;
 
   if( TxMsg ) {
     byte = msg_tx_process( TxMsg, done );
