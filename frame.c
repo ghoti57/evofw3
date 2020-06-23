@@ -5,6 +5,9 @@
 
 #include "config.h"
 #include "message.h"
+#include "uart.h"
+#include "cc1101.h"
+
 #include "frame.h"
 
 #define DEBUG_FRAME(_v)    DEBUG3(_v)
@@ -121,7 +124,7 @@ static void frame_rx_reset(void) {
   memset( &rxFrm, 0, sizeof(rxFrm) );
 }
 
-static uint8_t evo_hdr[] = { 0x33, 0x55, 0x53 };
+//static uint8_t evo_hdr[] = { 0x33, 0x55, 0x53 };
 static uint8_t evo_tlr[] = { 0x35 };
 static uint32_t const syncWord = 0x00335553;
 

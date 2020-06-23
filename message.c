@@ -192,6 +192,7 @@ static uint8_t get_hdr_flags(uint8_t header ) {
   return flags;
 }
 
+static uint8_t get_header( uint8_t flags ) __attribute__((unused));
 static uint8_t get_header( uint8_t flags ) {
   uint8_t i;
 
@@ -575,7 +576,7 @@ static uint8_t msg_rx_payload( struct message *msg, uint8_t byte ) {
   return state;
 }
 
-static uint8_t msg_rx_checksum( struct message *msg, uint8_t byte ) {
+static uint8_t msg_rx_checksum( struct message *msg, uint8_t byte __attribute__((unused))) {
   uint8_t state = S_COMPLETE;
 
   if( msg->csum != 0 && !msg->error )
@@ -1032,7 +1033,7 @@ void msg_tx_done(void) {
 **/
 
 static uint8_t inCmd;
-static uint8_t *cmdBuff;
+static char *cmdBuff;
 static uint8_t nCmd;
 
 void msg_work(void) {
@@ -1047,7 +1048,7 @@ void msg_work(void) {
       msg_free( &rx );
     }
   } else if( nCmd ) {
-    nCmd -= tty_put_str( cmdBuff, nCmd );
+    nCmd -= tty_put_str( (uint8_t *)cmdBuff, nCmd );
     if( !nCmd )
       inCmd = 0;
   } else {

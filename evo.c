@@ -14,9 +14,6 @@
 #include "tty.h"
 
 void main_init(void) {
-  char buff[24];
-  uint8_t n;
-
   uint8_t  myClass = 18;
   uint32_t myId = 0x4DADA;
 
