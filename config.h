@@ -4,11 +4,11 @@
 #if defined ARDUINO_AVR_PRO
   #define GDO0 INT1
   #define GDO2 INT0
-  #include "hw\atm328_pins.h"
+  #include "atm328_pins.h"
 #elif defined ARDUINO_AVR_NANO
   #define GDO0 INT0
   #define GDO2 INT1
-  #include "hw\atm328_pins.h"
+  #include "atm328_pins.h"
 #else
   #error "CC1101 connection not defined for target"
 #endif
