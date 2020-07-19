@@ -88,7 +88,8 @@ static inline uint8_t manchester_decode( uint8_t byte ) {
 }
 
 static inline uint8_t manchester_encode( uint8_t value ) {
-  return man_encode[ value & 0xF ];
+  return MAN_ENCODE(value & 0xF )
+  ;
 }
 
 /***********************************************************************************
@@ -264,15 +265,26 @@ static uint8_t tx_suffix[] = {
 };
 
 void frame_tx_start( uint8_t *raw, uint8_t nRaw ) {
+  uint8_t i, done, byte;
+
+  // Encode raw frame
+  for( i=0 ; i<nRaw+1 ; i+=2 ) {
+  	byte = msg_tx_byte(&done);
+	if( done ) break;
+	
+	raw[ i   ] = manchester_encode( byte >> 4 );
+	raw[ i+1 ] = manchester_encode( byte      );
+  }
+
+  txFrm.nBytes = i;
   txFrm.raw = raw;
   txFrm.nRaw = nRaw;
-
+	
   txFrm.state = FRM_TX_READY;
 }
 
 uint8_t frame_tx_byte(void) {
   uint8_t byte = 0x00;
-  uint8_t done = 0;
 
   switch( txFrm.state ) {
   case FRM_TX_IDLE:
@@ -289,19 +301,11 @@ uint8_t frame_tx_byte(void) {
     // Fall through
 
   case FRM_TX_MESSAGE:
-    if( ( txFrm.count&1 ) == 0 )
-      txFrm.msgByte = msg_tx_byte(&done);
+    if( txFrm.count < txFrm.nBytes ) {
+      byte = txFrm.raw[ txFrm.count++ ];
+	  break;
+    } 
 
-    if( !done ) {
-      byte = manchester_encode( txFrm.msgByte >> 4 );
-      txFrm.msgByte <<= 4;
-      txFrm.count++;
-
-      if( txFrm.raw && txFrm.nBytes<txFrm.nRaw )
-        txFrm.raw[ txFrm.nBytes++ ] = byte;
-
-      break;
-    }
     msg_tx_end( txFrm.nBytes );
 
     txFrm.count = 0;
@@ -342,8 +346,8 @@ static void frame_rx_enable(void) {
 }
 
 static void frame_tx_enable(void) {
-//  cc_enter_tx_mode();
-//  uart_tx_enable();
+  cc_enter_tx_mode();
+  uart_tx_enable();
 
   frame.state = FRM_TX;
   txFrm.state = FRM_TX_IDLE;
@@ -390,9 +394,6 @@ void frame_work(void) {
       frame_tx_done();
       frame_rx_enable();
     }
-    // TEST ONLY
-    else if( txFrm.state>FRM_TX_READY ) frame_tx_byte();
-
     break;
   }
 
