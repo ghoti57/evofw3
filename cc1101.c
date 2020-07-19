@@ -22,9 +22,9 @@
 
 // CC1101 register settings
 static const uint8_t PROGMEM CC_REGISTER_VALUES[] = {
-  CC1100_IOCFG2, 0x0D, //0x00,  // GDO2- FIFO interrupt
+  CC1100_IOCFG2, 0x0D,  // GDO2- RX data
   CC1100_IOCFG1, 0x2E,  // GDO1- not used
-  CC1100_IOCFG0, 0x2E,  // GDO0- Frame interrupt
+  CC1100_IOCFG0, 0x2E,  // GDO0- TX data
 
   CC1100_PKTLEN,   0x00, //
   CC1100_PKTCTRL1, 0x00, //
@@ -94,7 +94,7 @@ static uint8_t cc_write(uint8_t addr, uint8_t b) {
   return result;
 }
 
-#define INT_MASK 0
+#define INT_MASK GDO2_INT_MASK
 void cc_enter_idle_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 

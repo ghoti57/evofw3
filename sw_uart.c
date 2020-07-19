@@ -269,11 +269,11 @@ static uint8_t rx_edge(uint8_t interval) {
 
 static uint8_t clockShift;
 
-ISR(GDO0_INT_VECT) {
+ISR(GDO2_INT_VECT) {
   DEBUG_ISR(1);
 
   rx.time  = RX_CLOCK;                // Grab a copy of the counter ASAP for accuracy
-  rx.level = ( GDO0_PIN & GDO0_IN );  // and the current level
+  rx.level = ( GDO2_PIN & GDO2_IN );  // and the current level
 
   if( rx.level != rx.lastLevel ) {
     uint16_t interval;
@@ -305,9 +305,6 @@ ISR(TIMER1_OVF_vect) {
 */
 
 static void rx_init(void) {
-  uint8_t sreg = SREG;
-  cli();
-
   TCCR1A = 0; // Normal mode, no output pins
 
   // We want to prescale the hardware timer as much as possible
@@ -319,8 +316,6 @@ static void rx_init(void) {
   clockShift = ( F_CPU==16000000 ) ? 2 : 1;
 
   TIMSK1 |= TOIE1;
-
-  SREG = sreg;
 }
 
 /********************************************************
@@ -391,20 +386,18 @@ ISR(SW_INT_VECT) {
 
 }
 
-
 //---------------------------------------------------------------------------------
 
 static void rx_start(void) {
   uint8_t sreg = SREG;
   cli();
 
-  // Make sure configured as input in case shared with TX
-  GDO0_DDR  &= ~GDO0_IN;
-  GDO0_PORT |=  GDO0_IN;      // Set input pull-up
+  // rising and falling edge
+  EICRA &= ~( 1 << GDO2_INT_ISCn0 ) & ~( 1 << GDO2_INT_ISCn1 ) ;
+  EICRA |=  ( 1 << GDO2_INT_ISCn0 );   
 
-  EICRA |= ( 1 << GDO0_INT_ISCn0 );   // rising and falling edge
-  EIFR   = GDO0_INT_MASK ;    // Acknowledge any previous edges
-  EIMSK |= GDO0_INT_MASK ;    // Enable interrupts
+  EIFR   = GDO2_INT_MASK ;    // Acknowledge any previous edges
+  EIMSK |= GDO2_INT_MASK ;    // Enable interrupts
 
   // Configure SW interrupt for edge processing
   SW_INT_DDR  |= SW_INT_IN;
@@ -419,14 +412,9 @@ static void rx_start(void) {
 //---------------------------------------------------------------------------------
 
 static void rx_stop(void) {
-  uint8_t sreg = SREG;
-  cli();
-
-  EIMSK &= ~GDO0_INT_MASK;  // Disable interrupts
-
-  SREG = sreg;
+  EIMSK &= ~GDO2_INT_MASK;  // Disable interrupts
+  rx.state = RX_OFF;
 }
-
 
 /***************************************************************************
 ** External interface
@@ -454,11 +442,26 @@ void uart_tx_enable(void) {
 }
 
 void uart_disable(void) {
+  uint8_t sreg = SREG;
+  cli();
+	
   rx_stop();
+
+  SREG = sreg;
 }
 
 void uart_init(void) {
-  rx_reset();
+  uint8_t sreg = SREG;
+  cli();
+
+  GDO0_DDR  |=  GDO0_IN;
+  GDO0_PORT |=  GDO0_IN;		// Set output high
+
+  GDO2_DDR  &= ~GDO2_IN;
+  GDO2_PORT |=  GDO2_IN;		// Set input pull-up
+
   rx_init();
+
+  SREG = sreg;
 }
 
