@@ -186,7 +186,7 @@ static const uint8_t address_flags[4] = {
 static uint8_t get_hdr_flags(uint8_t header ) {
   uint8_t flags;
 
-  flags = ( header & HDR_T_MASK ) >> 4;   // Message type
+  flags = ( header & HDR_T_MASK ) >> HDR_T_SHIFT;   // Message type
   flags |= address_flags[ ( header & HDR_A_MASK ) >> HDR_A_SHIFT ];
   if( header & HDR_PARAM0 ) flags |= F_PARAM0;
   if( header & HDR_PARAM1 ) flags |= F_PARAM1;
@@ -670,6 +670,7 @@ static uint8_t  MyClass = 18;
 static uint32_t MyID = 0x4DADA;
 
 static uint8_t msg_scan_header( struct message *msg, char *str, uint8_t nChar ) {
+  uint8_t ok = 0;
   uint8_t msgType;
 
   // Cheap conversion to upper for acceptable characters
@@ -677,72 +678,83 @@ static uint8_t msg_scan_header( struct message *msg, char *str, uint8_t nChar ) 
     str[ nChar-1 ] &= ~( 'A'^'a' );
 
   for( msgType=F_RQ ; msgType<=F_RP ; msgType++ ) {
-    if( !strcmp( str, MsgType[msgType] ) ) {
+    if( 0==strcmp( str, MsgType[msgType] ) ) {
       msg->fields = msgType;
+	  ok = 1;
       break;
     }
   }
 
-  return msg_print_type( str, msg->fields );
+  return ok;
 }
 
-static uint8_t msg_scan_addr( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+static uint8_t msg_scan_addr( struct message *msg, char *str, uint8_t nChar ) {
   uint8_t ok = 0;
   uint8_t addr = msg->state - S_ADDR0;
-  uint8_t class;
-  uint32_t id;
 
-  if( str[0]!='-' && 2 == sscanf( str, "%hhu:%lu", &class, &id ) ) {
-    // Specific address for this device
-    if( class==18 && id ==730 ) {
-      class = MyClass;
-      id = MyID;
-    }
+  if( str[0]!='-' ) {
+    uint8_t class;
+    uint32_t id;
 
-    msg->addr[addr][0] = ( class<< 2 ) | ( ( id >> 16 ) & 0x03 );
-    msg->addr[addr][1] =                 ( ( id >>  8 ) & 0xFF );
-    msg->addr[addr][2] =                 ( ( id       ) & 0xFF );
+  	if( nChar<11 && 2==sscanf( str, "%hhu:%lu", &class, &id ) ) {
 
-    msg->fields |= F_ADDR0 << addr;
+	  // Specific address for this device
+      if( class==18 && id==730 ) {
+        class = MyClass;		  
+        id = MyID;
+      }
+
+      msg->addr[addr][0] = ( class<< 2 ) | ( ( id >> 16 ) & 0x03 );
+      msg->addr[addr][1] =                 ( ( id >>  8 ) & 0xFF );
+      msg->addr[addr][2] =                 ( ( id       ) & 0xFF );
+
+      msg->fields |= F_ADDR0 << addr;
+      ok = 1;
+
+      msg->csum += msg->addr[addr][0] + msg->addr[addr][1] + msg->addr[addr][2];
+    } 
+  } else {
     ok = 1;
-
-    msg->csum += msg->addr[addr][0] + msg->addr[addr][1] + msg->addr[addr][2];
   }
 
-  return msg_print_addr( str, msg->addr[addr], ok );
+  return ok;
 }
 
-static uint8_t msg_scan_param( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+static uint8_t msg_scan_param( struct message *msg, char *str, uint8_t nChar ) {
   uint8_t ok = 0;
   uint8_t param = msg->state - S_PARAM0;
 
-  if( str[0]!='-' && 1 == sscanf( str, "%hhu", msg->param+param ) ) {
-    msg->fields |= F_PARAM0 << param;
-    ok = 1;
+  if( str[0]!='-' ) {
+  	if( nChar<5 && 1==sscanf( str, "%hhu", msg->param+param ) ) {
+      msg->fields |= F_PARAM0 << param;
+      ok = 1;
 
-    msg->csum += msg->param[param];
+      msg->csum += msg->param[param];
+    } 
+  } else {
+    ok = 1;
   }
 
-  return msg_print_param( str, msg->param[param], ok );
+  return ok;
 }
 
-static uint8_t msg_scan_opcode( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+static uint8_t msg_scan_opcode( struct message *msg, char *str, uint8_t nChar ) {
   uint8_t ok = 0;
 
-  if( str[0]!='-' && 2 == sscanf( str, "%02hhx%02hhx", msg->opcode+0,msg->opcode+1 )  ) {
+  if( nChar==5 && 2==sscanf( str, "%02hhx%02hhx", msg->opcode+0,msg->opcode+1 )  ) {
     msg->rxFields |= F_OPCODE;
     ok = 1;
 
     msg->csum += msg->opcode[0] + msg->opcode[1];
   }
 
-  return msg_print_opcode( str, msg->opcode, ok );
+  return ok;
 }
 
-static uint8_t msg_scan_len( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
+static uint8_t msg_scan_len( struct message *msg, char *str, uint8_t nChar ) {
   uint8_t ok = 0;
 
-  if( str[0]!='-' && 1 == sscanf( str, "%hhu", &msg->len ) ) {
+  if( nChar<5 && 1==sscanf( str, "%hhu", &msg->len ) ) {
     if( msg->len > 0 && msg->len <= MAX_PAYLOAD )
     {
       msg->rxFields |= F_LEN;
@@ -750,25 +762,27 @@ static uint8_t msg_scan_len( struct message *msg, char *str, uint8_t nChar __att
 
       msg->csum += msg->len;
     }
-  }
+  } 
 
-  return msg_print_len( str, msg->len, ok );
+  return ok;
 }
 
-static uint8_t msg_scan_payload( struct message *msg, char *str, uint8_t nChar __attribute__ ((unused)) ) {
-
-  if( 1 == sscanf( str, "%02hhx", msg->payload+msg->nPayload ) )
+static uint8_t msg_scan_payload( struct message *msg, char *str, uint8_t nChar ) {
+  uint8_t ok=0;
+  
+  if( nChar==3 && 1==sscanf( str, "%02hhx", msg->payload+msg->nPayload ) )
   {
-    msg->csum += msg->payload[msg->nPayload];
-    return msg_print_payload( str, msg->payload[msg->nPayload] );
+    msg->csum += msg->payload[msg->nPayload++];
+	ok = 1;
   }
-  else
-    return sprintf( str,"??" );
+
+  return ok;
 }
 
 static uint8_t msg_scan( struct message *msg, uint8_t byte) {
   static char field[17];
   static uint8_t nChar;
+  uint8_t ok = 1;
 
   if( byte=='\r' ) {
     // Ignore blank line
@@ -804,13 +818,12 @@ static uint8_t msg_scan( struct message *msg, uint8_t byte) {
     if( nChar==2 ) {
       field[nChar++] = '\0';
 
-      msg_scan_payload( msg, field, nChar );
-      msg->nPayload++;
-
-      nChar = 0;
-
-      if( msg->nPayload == msg->len ) {
-        msg->state = S_CHECKSUM;
+      ok = msg_scan_payload( msg, field, nChar );
+      if( ok ) {
+        nChar = 0;
+        if( msg->nPayload == msg->len ) {
+          msg->state = S_CHECKSUM;
+        }
       }
 
     } else { // wait for second byte
@@ -821,22 +834,25 @@ static uint8_t msg_scan( struct message *msg, uint8_t byte) {
   if( !byte ) {
     switch( msg->state ) {
     case S_START: /* fall through */
-    case S_HEADER:      msg_scan_header( msg, field, nChar ); msg->state = S_PARAM0;   break;
-    case S_ADDR0:       msg_scan_addr( msg, field, nChar );   msg->state = S_ADDR1;    break;
-    case S_ADDR1:       msg_scan_addr( msg, field, nChar );   msg->state = S_ADDR2;    break;
-    case S_ADDR2:       msg_scan_addr( msg, field, nChar );   msg->state = S_OPCODE;   break;
-    case S_PARAM0:      msg_scan_param( msg, field, nChar );  msg->state = S_ADDR0;    break;
+    case S_HEADER:      ok=msg_scan_header( msg, field, nChar ); msg->state = S_PARAM0;   break;
+    case S_ADDR0:       ok=msg_scan_addr( msg, field, nChar );   msg->state = S_ADDR1;    break;
+    case S_ADDR1:       ok=msg_scan_addr( msg, field, nChar );   msg->state = S_ADDR2;    break;
+    case S_ADDR2:       ok=msg_scan_addr( msg, field, nChar );   msg->state = S_OPCODE;   break;
+    case S_PARAM0:      ok=msg_scan_param( msg, field, nChar );  msg->state = S_ADDR0;    break;
 //    case S_PARAM1:
-    case S_OPCODE:      msg_scan_opcode( msg, field, nChar ); msg->state = S_LEN;      break;
-    case S_LEN:         msg_scan_len( msg, field, nChar );    msg->state = S_PAYLOAD;  break;
-    case S_PAYLOAD:                                           msg->state = S_ERROR;    break;
-    case S_CHECKSUM:    msg->state = ( nChar!=1 ) ? S_ERROR : S_COMPLETE;              break;
+    case S_OPCODE:      ok=msg_scan_opcode( msg, field, nChar ); msg->state = S_LEN;      break;
+    case S_LEN:         ok=msg_scan_len( msg, field, nChar );    msg->state = S_PAYLOAD;  break;
+    case S_PAYLOAD:                                              msg->state = S_ERROR;    break;
+    case S_CHECKSUM:    msg->state = ( nChar!=1 ) ? S_ERROR : S_COMPLETE;                 break;
 //  case S_TRAILER:
 //  case S_COMPLETE:
 //  case S_ERROR:
     }
     nChar = 0;
   }
+  
+  if( !ok )
+    msg->state = S_ERROR;
 
   if( msg->state==S_PAYLOAD ) {
     if( ( msg->rxFields & F_MAND ) != F_MAND ) {
