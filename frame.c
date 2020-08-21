@@ -134,6 +134,7 @@ static uint32_t const syncWord = 0x00335553;
 
 void frame_rx_byte(uint8_t byte) {
   switch( rxFrm.state ) {
+
   case FRM_RX_IDLE:
     rxFrm.state = FRM_RX_SYNCH;
     // Fall through
@@ -338,6 +339,7 @@ static void frame_tx_done(void) {
 */
 
 static void frame_rx_enable(void) {
+  uart_disable();
   cc_enter_rx_mode();
   uart_rx_enable();
 
@@ -346,6 +348,7 @@ static void frame_rx_enable(void) {
 }
 
 static void frame_tx_enable(void) {
+  uart_disable();
   cc_enter_tx_mode();
   uart_tx_enable();
 
