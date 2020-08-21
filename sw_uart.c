@@ -483,7 +483,7 @@ static void tx_start(void) {
 
   TCNT0 = 0;
   TIMSK0 |= ( 1<<OCIE0A );
-  GDO0_PIN |=  GDO0_IN ;	// Start in MARK
+  GDO0_PORT |=  GDO0_IN ;	// Start in MARK
 
   SREG = sreg;
 }
@@ -493,7 +493,7 @@ static void tx_start(void) {
 static void tx_stop(void) {
   TIMSK0 &= ~( 1<<OCIE0A );
   tx.state = TX_OFF;
-  GDO0_PIN |=  GDO0_IN ;	// Leave in MARK
+  GDO0_PORT &= ~GDO0_IN ;	// Leave in SPACE
 }
 
 
@@ -542,7 +542,7 @@ void uart_init(void) {
   cli();
 
   GDO0_DDR  |=  GDO0_IN;
-  GDO0_PORT |=  GDO0_IN;		// Set output high
+  GDO0_PORT &= ~GDO0_IN;		// Sstart in SPACE
 
   GDO2_DDR  &= ~GDO2_IN;
   GDO2_PORT |=  GDO2_IN;		// Set input pull-up
