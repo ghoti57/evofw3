@@ -781,8 +781,10 @@ static uint8_t msg_scan_payload( struct message *msg, char *str, uint8_t nChar )
 
 static uint8_t msg_scan( struct message *msg, uint8_t byte) {
   static char field[17];
-  static uint8_t nChar;
+  static uint8_t nChar=0;
   uint8_t ok = 1;
+
+  if( byte=='\n' ) return 0; // Discard newline
 
   if( byte=='\r' ) {
     // Ignore blank line
@@ -1097,9 +1099,8 @@ void msg_work(void) {
 
   if( byte ) {  // Still have an unused byte
     if( tx ) { // TX message
-        if( msg_scan( tx, byte ) ) {
-          msg_tx_ready( &tx );
-      }
+      if( msg_scan( tx, byte ) )
+        msg_tx_ready( &tx );
     }
   }
 
