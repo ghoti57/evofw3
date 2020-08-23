@@ -89,6 +89,7 @@
 #define DEBUG_PIN6        ( 1<<PORTC6 )
 
 // TTY USART
+#define TTY_USART
 #define TTY_UDRE_VECT   USART_UDRE_vect
 #define TTY_RX_VECT     USART_RX_vect
 

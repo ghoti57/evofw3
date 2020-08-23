@@ -1,11 +1,14 @@
 /**************************************************************************
-** tty.c
+** tty_usart.c
 **
-** Host facing UART
+** Host facing USART
 */
 #include <avr/interrupt.h>
 
 #include "config.h"
+
+#if defined(TTY_USART)
+
 #include "trace.h"
 #include "tty.h"
 
@@ -262,3 +265,4 @@ void tty_init(void ) {
 void tty_work(void) {
   tty_do_tx();
 }
+#endif // TTY_USART
