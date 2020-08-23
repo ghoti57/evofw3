@@ -9,6 +9,10 @@
   #define GDO0 INT1
   #define GDO2 INT0
   #include "atm328_pins.h"
+#elif defined ARDUINO_AVR_LEONARDO
+  #define GDO0 INT3
+  #define GDO2 INT2
+  #include "atm32u4_pins.h"
 #else
   #error "CC1101 connection not defined for target"
 #endif
