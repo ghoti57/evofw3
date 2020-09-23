@@ -8,7 +8,7 @@
 extern void frame_rx_byte(uint8_t byte);
 
 extern void frame_tx_start(uint8_t *raw, uint8_t nRaw);
-extern uint8_t frame_tx_byte(void);
+extern uint8_t frame_tx_byte(uint8_t *byte);
 
 extern void frame_disable(void);
 

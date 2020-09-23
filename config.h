@@ -12,6 +12,7 @@
 #elif defined ARDUINO_AVR_LEONARDO
   #define GDO0 INT3
   #define GDO2 INT2
+  #define CC_SERIAL Serial1
   #include "atm32u4_pins.h"
 #else
   #error "CC1101 connection not defined for target"
