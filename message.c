@@ -446,31 +446,6 @@ static uint8_t msg_print_field( struct message *msg, char *buff ) {
 
 /************************************************************************************
 **
-** Try to catch suspect messages for debug purposes
-*/
-static uint8_t check_payload_2309( struct message *msg ) {
-  uint8_t i;
-
-  for( i=0 ; i<msg->len ; i+=3 ) {
-    if( msg->payload[i] > 11 ) return MSG_SUSPECT_WARN;  // Bad zone number
-  }
-
-  return MSG_OK;
-}
-
-static uint8_t msg_check_payload( struct message *msg ) {
-  uint8_t error = MSG_OK;
-
-  uint16_t opcode = ( msg->opcode[0]<<8 ) + msg->opcode[1];
-  switch( opcode ) {
-  case 0x2309: error = check_payload_2309(msg); break;
-  }
-
-  return error;
-}
-
-/************************************************************************************
-**
 ** msg_print
 **
 ** Called repeatedly from msg_work.
@@ -493,9 +468,6 @@ static uint8_t msg_print( struct message *msg ) {
     DEBUG_MSG(1);
     msg->count = 0;
     n = 0;
-
-    if( msg->error==MSG_OK )
-      msg->error = msg_check_payload( msg );
   }
 
   // Do we still have outstanding text to send?
