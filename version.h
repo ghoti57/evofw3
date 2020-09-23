@@ -8,7 +8,7 @@
 #define BRANCH "uart\\evofw3"
 
 #define MAJOR  0
-#define MINOR  4
-#define SUBVER 2
+#define MINOR  5
+#define SUBVER 0
 
 #endif // _VERSION_H_
