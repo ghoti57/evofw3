@@ -19,6 +19,7 @@
 
 enum frame_states {
   FRM_OFF,
+  FRM_IDLE,
   FRM_RX,
   FRM_TX,
 };
@@ -49,9 +50,9 @@ static void frame_reset(void) {
 * NOTE *
 ********
 * The manchester decode process converts the data from
-*     2x8 bit little-endian to 8 bit big-endian
+*     8 bit little-endian to 4 bit big-endian
 * The manchester encode process converts the data from
-*     8 bit big-endian to 2x8 bit little-endian
+*     4 bit big-endian to 8 bit little-endian
 *
 * Since only a small subset of 8-bit values are actually allowed in
 * the bitstream rogue values can be used to identify some errors in
@@ -86,9 +87,9 @@ static inline uint8_t manchester_decode( uint8_t byte ) {
   return decoded;
 }
 
-static inline void manchester_encode( uint8_t value, uint8_t *byte1, uint8_t *byte2 ) {
-  *byte1 = MAN_ENCODE( ( value >> 4 ) & 0xF );
-  *byte2 = MAN_ENCODE( ( value      ) & 0xF );
+static inline uint8_t manchester_encode( uint8_t value ) {
+  return MAN_ENCODE(value & 0xF )
+  ;
 }
 
 /***********************************************************************************
@@ -133,6 +134,11 @@ static uint32_t const syncWord = 0x00335553;
 
 void frame_rx_byte(uint8_t byte) {
   switch( rxFrm.state ) {
+
+  case FRM_RX_IDLE:
+    rxFrm.state = FRM_RX_SYNCH;
+    // Fall through
+
   case FRM_RX_SYNCH:
     rxFrm.syncBuffer <<= 8;
     rxFrm.syncBuffer |= byte;
@@ -211,37 +217,187 @@ static void frame_rx_done(void) {
   DEBUG_FRAME(0);
 }
 
+/***********************************************************************************
+** TX FRAME processing
+**
+** We must provide the following to the uart
+**   <prefix><message><suffix>
+**
+**   <prefix>  = <preamble><sync word><header>
+**   <message> = < manchester encoded pairs of bytes >
+**   <suffix>  = <trailer><training>
+**
+*/
+
+enum frame_tx_states {
+  FRM_TX_OFF,
+  FRM_TX_READY,
+  FRM_TX_IDLE,
+  FRM_TX_PREFIX,
+  FRM_TX_MESSAGE,
+  FRM_TX_SUFFIX,
+  FRM_TX_DONE
+};
+
+static struct frame_tx {
+  uint8_t state;
+
+  uint8_t nBytes;
+  uint8_t nRaw;
+  uint8_t *raw;
+
+  uint8_t count;
+  uint8_t msgByte;
+} txFrm;
+
+static void frame_tx_reset(void) {
+  memset( &txFrm, 0, sizeof(txFrm) );
+}
+
+static uint8_t tx_prefix[] = {
+  0x55, 0x55, 0x55, 0x55, 0x55,   // Pre-amble
+  0xFF, 0x00,                     // Sync Word
+  0x33, 0x55, 0x53                // Header
+};
+
+static uint8_t tx_suffix[] = {
+  0x35,                           // Trailer
+  0x55, 0x55, 0x55,               // Training
+};
+
+void frame_tx_start( uint8_t *raw, uint8_t nRaw ) {
+  uint8_t i, done, byte;
+
+  // Encode raw frame
+  for( i=0 ; i<nRaw+1 ; i+=2 ) {
+  	byte = msg_tx_byte(&done);
+	if( done ) break;
+	
+	raw[ i   ] = manchester_encode( byte >> 4 );
+	raw[ i+1 ] = manchester_encode( byte      );
+  }
+
+  txFrm.nBytes = i;
+  txFrm.raw = raw;
+  txFrm.nRaw = nRaw;
+	
+  txFrm.state = FRM_TX_READY;
+}
+
+uint8_t frame_tx_byte(void) {
+  uint8_t byte = 0x00;
+
+  switch( txFrm.state ) {
+  case FRM_TX_IDLE:
+    txFrm.state = FRM_TX_PREFIX;
+    // Fall through
+
+  case FRM_TX_PREFIX:
+    if( txFrm.count < sizeof(tx_prefix) ) {
+      byte = tx_prefix[txFrm.count++];
+      break;
+    }
+    txFrm.count = 0;
+    txFrm.state = FRM_TX_MESSAGE;
+    // Fall through
+
+  case FRM_TX_MESSAGE:
+    if( txFrm.count < txFrm.nBytes ) {
+      byte = txFrm.raw[ txFrm.count++ ];
+	  break;
+    } 
+
+    msg_tx_end( txFrm.nBytes );
+
+    txFrm.count = 0;
+    txFrm.state = FRM_TX_SUFFIX;
+    // Fall through
+
+  case FRM_TX_SUFFIX:
+    if( txFrm.count < sizeof(tx_suffix) ) {
+      byte = tx_suffix[txFrm.count++];
+      break;
+    }
+    txFrm.count = 0;
+    txFrm.state = FRM_TX_DONE;
+    // Fall through
+
+  case FRM_TX_DONE:
+    break;
+  }
+
+  return byte;
+}
+
+static void frame_tx_done(void) {
+  msg_tx_done();
+  frame_tx_reset();
+}
+
 /***************************************************************************
 ** External interface
 */
 
-void frame_rx_enable(void) {
-  uart_rx_enable();
+static void frame_rx_enable(void) {
+  uart_disable();
   cc_enter_rx_mode();
-  rxFrm.state = FRM_RX_SYNCH;
+  uart_rx_enable();
+
+  frame.state = FRM_RX;
+  rxFrm.state = FRM_RX_IDLE;
 }
 
-void frame_tx_enable(void) {
-  uart_tx_enable();
+static void frame_tx_enable(void) {
+  uart_disable();
   cc_enter_tx_mode();
+  uart_tx_enable();
+
+  frame.state = FRM_TX;
+  txFrm.state = FRM_TX_IDLE;
 }
 
 void frame_disable(void) {
   uart_disable();
   cc_enter_idle_mode();
+
+  frame.state = FRM_OFF;
 }
 
 void frame_init(void) {
   frame_reset();
   uart_init();
+
+  frame.state = FRM_IDLE;
 }
 
+
 void frame_work(void) {
-  if( rxFrm.state>=FRM_RX_DONE ) {
-    frame_rx_done();
+  switch( frame.state ) {
+  case FRM_IDLE:
+    if( rxFrm.state==FRM_RX_OFF ) {
+      frame_rx_enable();
+    }
+    break;
+
+  case FRM_RX:
+    if( rxFrm.state>=FRM_RX_DONE ) {
+      frame_rx_done();
+    }
+    if( rxFrm.state<=FRM_RX_IDLE ) {
+      if( txFrm.state==FRM_TX_READY ) {
+        frame_tx_enable();
+      } else if( rxFrm.state==FRM_RX_OFF ) {
+        frame_rx_enable();
+      }
+    }
+    break;
+
+  case FRM_TX:
+    if( txFrm.state>=FRM_TX_DONE ) {
+      frame_tx_done();
+      frame_rx_enable();
+    }
+    break;
   }
 
-  if( rxFrm.state==FRM_RX_OFF ) {
-    frame_rx_enable();
-  }
 }

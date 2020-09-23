@@ -269,11 +269,11 @@ static uint8_t rx_edge(uint8_t interval) {
 
 static uint8_t clockShift;
 
-ISR(GDO0_INT_VECT) {
+ISR(GDO2_INT_VECT) {
   DEBUG_ISR(1);
 
   rx.time  = RX_CLOCK;                // Grab a copy of the counter ASAP for accuracy
-  rx.level = ( GDO0_PIN & GDO0_IN );  // and the current level
+  rx.level = ( GDO2_PIN & GDO2_IN );  // and the current level
 
   if( rx.level != rx.lastLevel ) {
     uint16_t interval;
@@ -305,9 +305,6 @@ ISR(TIMER1_OVF_vect) {
 */
 
 static void rx_init(void) {
-  uint8_t sreg = SREG;
-  cli();
-
   TCCR1A = 0; // Normal mode, no output pins
 
   // We want to prescale the hardware timer as much as possible
@@ -319,8 +316,6 @@ static void rx_init(void) {
   clockShift = ( F_CPU==16000000 ) ? 2 : 1;
 
   TIMSK1 |= TOIE1;
-
-  SREG = sreg;
 }
 
 /********************************************************
@@ -391,20 +386,18 @@ ISR(SW_INT_VECT) {
 
 }
 
-
 //---------------------------------------------------------------------------------
 
 static void rx_start(void) {
   uint8_t sreg = SREG;
   cli();
 
-  // Make sure configured as input in case shared with TX
-  GDO0_DDR  &= ~GDO0_IN;
-  GDO0_PORT |=  GDO0_IN;      // Set input pull-up
+  // rising and falling edge
+  EICRA &= ~( 1 << GDO2_INT_ISCn0 ) & ~( 1 << GDO2_INT_ISCn1 ) ;
+  EICRA |=  ( 1 << GDO2_INT_ISCn0 );   
 
-  EICRA |= ( 1 << GDO0_INT_ISCn0 );   // rising and falling edge
-  EIFR   = GDO0_INT_MASK ;    // Acknowledge any previous edges
-  EIMSK |= GDO0_INT_MASK ;    // Enable interrupts
+  EIFR   = GDO2_INT_MASK ;    // Acknowledge any previous edges
+  EIMSK |= GDO2_INT_MASK ;    // Enable interrupts
 
   // Configure SW interrupt for edge processing
   SW_INT_DDR  |= SW_INT_IN;
@@ -419,12 +412,88 @@ static void rx_start(void) {
 //---------------------------------------------------------------------------------
 
 static void rx_stop(void) {
+  EIMSK &= ~GDO2_INT_MASK;  // Disable interrupts
+  rx.state = RX_OFF;
+}
+
+
+/***************************************************************************
+** TX Processing
+*/
+
+enum uart_tx_states {
+  TX_OFF,
+  TX_IDLE,
+  TX
+};
+
+
+#define MARK  1
+#define SPACE 0
+
+static struct uart_tx_state {
+  uint8_t state;
+
+  uint8_t byte;
+  uint8_t bitNo;
+} tx;
+
+static void tx_reset(void) {
+  memset( &tx, 0, sizeof(tx) );
+}
+
+ISR(TIMER0_COMPA_vect) {
+  uint8_t bit;
+  DEBUG_ISR(1);
+
+  if( tx.bitNo==0 ) { // START bit
+	bit = SPACE;
+  } else if( tx.bitNo<9 ) { // data bit
+    uint8_t mask = 1 << ( tx.bitNo - 1 );	// Little Endian
+    bit = ( tx.byte & mask ) ? MARK : SPACE;
+  } else { // STOP bit
+    bit = MARK;
+  }
+
+  if( bit ) GDO0_PORT |=  GDO0_IN ;
+  else      GDO0_PORT &= ~GDO0_IN ;
+
+  if( tx.bitNo==0 ) tx.byte = frame_tx_byte();
+  tx.bitNo = ( tx.bitNo+1 ) % 10;
+
+  DEBUG_ISR(0);
+}
+
+//---------------------------------------------------------------------------------
+
+static void tx_init(void) {
+  TCCR0A = ( 1<<WGM01 ); // CTC, no output pins
+  TCCR0B = 0 ;
+	
+  TCCR0B |= ( 1<<CS01 ); // Pre-scale by 8
+
+  OCR0A = 51;	// 38400 baud	
+}
+
+//---------------------------------------------------------------------------------
+
+static void tx_start(void) {
   uint8_t sreg = SREG;
   cli();
 
-  EIMSK &= ~GDO0_INT_MASK;  // Disable interrupts
+  TCNT0 = 0;
+  TIMSK0 |= ( 1<<OCIE0A );
+  GDO0_PORT |=  GDO0_IN ;	// Start in MARK
 
   SREG = sreg;
+}
+
+//---------------------------------------------------------------------------------
+
+static void tx_stop(void) {
+  TIMSK0 &= ~( 1<<OCIE0A );
+  tx.state = TX_OFF;
+  GDO0_PORT &= ~GDO0_IN ;	// Leave in SPACE
 }
 
 
@@ -436,6 +505,7 @@ void uart_rx_enable(void) {
   uint8_t sreg = SREG;
   cli();
 
+  tx_stop();
   rx_reset();
   rx.state = RX_IDLE;
 
@@ -448,17 +518,38 @@ void uart_tx_enable(void) {
   uint8_t sreg = SREG;
   cli();
 
-// TODO:
+  rx_stop();
+  tx_reset();
+  tx.state = TX_IDLE;
+
+  SREG = sreg;
+
+  tx_start();
+}
+
+void uart_disable(void) {
+  uint8_t sreg = SREG;
+  cli();
+	
+  rx_stop();
+  tx_stop();
 
   SREG = sreg;
 }
 
-void uart_disable(void) {
-  rx_stop();
-}
-
 void uart_init(void) {
-  rx_reset();
+  uint8_t sreg = SREG;
+  cli();
+
+  GDO0_DDR  |=  GDO0_IN;
+  GDO0_PORT &= ~GDO0_IN;		// Sstart in SPACE
+
+  GDO2_DDR  &= ~GDO2_IN;
+  GDO2_PORT |=  GDO2_IN;		// Set input pull-up
+
   rx_init();
+  tx_init();  
+
+  SREG = sreg;
 }
 
