@@ -128,22 +128,27 @@ static void frame_rx_reset(void) {
   memset( &rxFrm, 0, sizeof(rxFrm) );
 }
 
-//static uint8_t evo_hdr[] = { 0x33, 0x55, 0x53 };
+static uint8_t evo_hdr[] = { 0x33, 0x55, 0x53 };
 static uint8_t evo_tlr[] = { 0x35 };
-static uint32_t const syncWord = 0x00335553;
+static uint32_t syncWord;
 
 void frame_rx_byte(uint8_t byte) {
   switch( rxFrm.state ) {
 
   case FRM_RX_IDLE:
-    rxFrm.state = FRM_RX_SYNCH;
-    // Fall through
+    rxFrm.syncBuffer = byte;
+    if( byte == evo_hdr[0] )
+      rxFrm.state = FRM_RX_SYNCH;
+    break;
 
   case FRM_RX_SYNCH:
     rxFrm.syncBuffer <<= 8;
-    rxFrm.syncBuffer |= byte;
-    rxFrm.syncBuffer &= 0x00FFFFFF;
+  	if( ( byte==0x00 ) || ( byte==0xFF ) || ( rxFrm.syncBuffer & 0xFF000000 ) ) {
+      rxFrm.state = FRM_RX_IDLE;
+	  break;
+    }
 
+    rxFrm.syncBuffer |= byte;
     if( rxFrm.syncBuffer == syncWord )
     {
       rxFrm.raw = msg_rx_start();
@@ -153,7 +158,7 @@ void frame_rx_byte(uint8_t byte) {
         DEBUG_FRAME(1);
       }
     }
-    break;
+	break;
 
   case FRM_RX_MESSAGE:
     if( byte==0x00 ) {
@@ -364,6 +369,10 @@ void frame_disable(void) {
 }
 
 void frame_init(void) {
+  uint8_t i;
+  for( i=0 ; i<sizeof(evo_hdr) ; i++ )
+    syncWord = ( syncWord<<8 ) | evo_hdr[i];
+
   frame_reset();
   uart_init();
 
