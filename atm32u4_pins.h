@@ -78,15 +78,15 @@
 #define SW_INT_DDR       DDRB
 #define SW_INT_IN        ( 1<<PORTB4 )
 
-// SOme debug pins
-//#define DEBUG_PORT        PORTC
-//#define DEBUG_DDR         DDRC
-//#define DEBUG_PIN1        ( 1<<PORTC0 )
-//#define DEBUG_PIN2        ( 1<<PORTC1 )
-//#define DEBUG_PIN3        ( 1<<PORTC2 )
-//#define DEBUG_PIN4        ( 1<<PORTC4 )
-//#define DEBUG_PIN5        ( 1<<PORTC5 )
-//#define DEBUG_PIN6        ( 1<<PORTC6 )
+// Some debug pins
+#define DEBUG_PORT        PORTF
+#define DEBUG_DDR         DDRF
+#define DEBUG_PIN1        ( 1<<PORTF7 )
+#define DEBUG_PIN2        ( 1<<PORTF6 )
+#define DEBUG_PIN3        ( 1<<PORTF5 )
+#define DEBUG_PIN4        ( 1<<PORTF4 )
+#define DEBUG_PIN5        ( 1<<PORTF1 )
+#define DEBUG_PIN6        ( 1<<PORTF0 )
 
 // TTY USB
 #define TTY_USB
