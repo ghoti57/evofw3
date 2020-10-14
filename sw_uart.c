@@ -46,7 +46,7 @@
 #define TEN_BITS      ( 10 * ONE_BIT )
 #define TEN_BITS_MIN  ( TEN_BITS - HALF_BIT )
 #define TEN_BITS_MAX  ( TEN_BITS + HALF_BIT )
-#define STOP_BITS_MAX ( 14 * ONE_BIT + HALF_BIT )
+#define STOP_BITS_MAX ( TEN_BITS + NINE_BITS - HALF_BIT  )
 
 /***********************************************************************************
 ** RX Frame state machine
@@ -270,35 +270,40 @@ static uint8_t rx_edge(uint8_t interval) {
 
 static uint8_t clockShift;
 
+static void rx_edge_detected(void) {
+  uint16_t interval;
+  uint8_t synch;
+  
+  if( rx.overflow && ( ( rx.overflow > 1 ) || ( rx.time > rx.time0 ) ) ) {
+      interval = 255;
+  } else {
+    interval = ( rx.time - rx.time0 ) >> clockShift;
+    if( interval > 255 ) interval = 255;
+  }
+  rx.overflow = 0;
+  
+  synch = rx_edge( interval );
+  if( synch ) rx.time0 = rx.time;
+  rx.lastLevel = rx.level;
+  rx.lastTime  = rx.time;
+}
+
 ISR(GDO2_INT_VECT) {
   DEBUG_ISR(1);
 
   rx.time  = RX_CLOCK;                // Grab a copy of the counter ASAP for accuracy
   rx.level = ( GDO2_PIN & GDO2_IN );  // and the current level
 
-  if( rx.level != rx.lastLevel ) {
-    uint16_t interval;
-    uint8_t synch;
-
-    if( rx.overflow && ( ( rx.overflow > 1 ) || ( rx.time > rx.time0 ) ) ) {
-        interval = 255;
-    } else {
-      interval = ( rx.time - rx.time0 ) >> clockShift;
-      if( interval > 255 ) interval = 255;
-    }
-    rx.overflow = 0;
-
-    synch = rx_edge( interval );
-    if( synch ) rx.time0 = rx.time;
-    rx.lastLevel = rx.level;
-    rx.lastTime  = rx.time;
-  }
+  if( rx.level != rx.lastLevel )
+	rx_edge_detected();
 
   DEBUG_ISR(0);
 }
 
 ISR(TIMER1_OVF_vect) {
   rx.overflow += 1;
+  if( rx.overflow > 1 )
+    rx_edge_detected();
 }
 
 /***************************************************************************
@@ -351,11 +356,11 @@ static uint8_t rx_process_edges( uint8_t *edges, uint8_t nEdges ) {
         // BIT complete?
         if( rx_t==rx_tBit ) {
           if( rx_tBit == ONE_BIT ) { // START BIT
-        } else if( rx_tBit < TEN_BITS ) {
-          uint8_t bit = ( rx_hi > HALF_BIT ) ? 0x80 : 0x00 ;
-          rx_byte >>= 1;
-          rx_byte  |= bit;
-        }
+          } else if( rx_tBit < TEN_BITS ) {
+            uint8_t bit = ( rx_hi > HALF_BIT ) ? 0x80 : 0x00 ;
+            rx_byte >>= 1;
+            rx_byte  |= bit;
+          }
 
           rx_tBit += ONE_BIT;
           rx_hi = 0;
