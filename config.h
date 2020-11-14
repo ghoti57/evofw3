@@ -1,7 +1,12 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
-#if defined ARDUINO_AVR_PRO
+#if defined ARDUINO_EVOFW3_ATMEGA32U4
+#include "atm32u4_pins.h"
+#elif defined ARDUINO_EVOFW3_ATMEGA328P
+#include "atm328_pins.h"
+
+#elif defined ARDUINO_AVR_PRO
   #define SWUART
   #define GDO0 INT0
   #define GDO2 INT1
