@@ -35,7 +35,7 @@ static void rx_stop(void) {
 }
 
 ISR( USART1_RX_vect ) {
-  uint8_t status;
+  volatile uint8_t status __attribute__((unused));
   uint8_t data;
 
 DEBUG_ISR(1);
