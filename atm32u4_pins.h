@@ -18,7 +18,7 @@
 #define SPI_PORT    PORTB
 #define SPI_PIN     PINB
 #define SPI_DDR     DDRB
-#define SPI_SS      6
+#define SPI_SS      CCSEL
 #define SPI_MOSI    2
 #define SPI_MISO    3
 #define SPI_SCLK    1
