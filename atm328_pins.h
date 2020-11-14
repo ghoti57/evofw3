@@ -69,7 +69,6 @@
 #else
   #error "GDO2 not mapped"
 #endif
-#endif // SWUART
 
 // Software interrupt
 #define SW_INT_ENBL     ( 1<<PCIE0 )
@@ -79,6 +78,7 @@
 #define SW_INT_PIN       PINB
 #define SW_INT_DDR       DDRB
 #define SW_INT_IN        ( 1<<PORTB0 )
+#endif // SWUART
 
 // SOme debug pins
 #define DEBUG_PORT        PORTC

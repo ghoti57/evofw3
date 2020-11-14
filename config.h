@@ -15,8 +15,6 @@
   #include "atm328_pins.h"
 #elif defined ARDUINO_AVR_LEONARDO
   #define HWUART
-  #define GDO0 INT3
-  #define GDO2 INT2
   #define CCSEL 6
   #include "atm32u4_pins.h"
 #else
