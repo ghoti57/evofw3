@@ -23,6 +23,7 @@
 #define SPI_MISO    4
 #define SPI_SCLK    5
 
+#if defined SWUART
 // GDO0 connection
 #if( GDO0==INT0 )
   #define GDO0_INT_MASK   ( 1 << INT0 )
@@ -68,6 +69,7 @@
 #else
   #error "GDO2 not mapped"
 #endif
+#endif // SWUART
 
 // Software interrupt
 #define SW_INT_ENBL     ( 1<<PCIE0 )

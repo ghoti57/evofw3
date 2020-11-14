@@ -7,7 +7,7 @@
 */
 
 #include "config.h"
-#if !defined(CC_SERIAL)
+#if defined(SWUART)
 
 #include <string.h>
 #include <util/delay.h>
@@ -564,4 +564,4 @@ void uart_init(void) {
   SREG = sreg;
 }
 
-#endif // !CC_SERIAL
+#endif // SWUART

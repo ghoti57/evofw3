@@ -8,7 +8,7 @@
 */
 
 #include "config.h"
-#if defined(CC_SERIAL)
+#if defined(HWUART)
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -172,4 +172,4 @@ void uart_init(void) {
   SREG = sreg;
 }
 
-#endif // !CC_SERIAL
+#endif // HWUART

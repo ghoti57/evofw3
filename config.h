@@ -2,19 +2,21 @@
 #define _CONFIG_H_
 
 #if defined ARDUINO_AVR_PRO
+  #define SWUART
   #define GDO0 INT0
   #define GDO2 INT1
   #define CCSEL 2
   #include "atm328_pins.h"
 #elif defined ARDUINO_AVR_NANO
+  #define SWUART
   #define GDO0 INT1
   #define GDO2 INT0
   #define CCSEL 2
   #include "atm328_pins.h"
 #elif defined ARDUINO_AVR_LEONARDO
+  #define HWUART
   #define GDO0 INT3
   #define GDO2 INT2
-  #define CC_SERIAL Serial1
   #define CCSEL 6
   #include "atm32u4_pins.h"
 #else

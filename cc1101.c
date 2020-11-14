@@ -94,7 +94,12 @@ static uint8_t cc_write(uint8_t addr, uint8_t b) {
   return result;
 }
 
+#if defined GDO2_INT_MASK
 #define INT_MASK GDO2_INT_MASK
+#else
+#define INT_MASK 0
+#endif
+
 void cc_enter_idle_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 

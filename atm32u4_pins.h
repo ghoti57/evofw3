@@ -23,6 +23,7 @@
 #define SPI_MISO    3
 #define SPI_SCLK    1
 
+#if defined SWUART
 // GDO0 connection
 #if( GDO0==INT2 )
   #define GDO0_INT_MASK   ( 1 << INT2 )
@@ -77,6 +78,7 @@
 #define SW_INT_PIN       PINB
 #define SW_INT_DDR       DDRB
 #define SW_INT_IN        ( 1<<PORTB4 )
+#endif // SWUART
 
 // Some debug pins
 #define DEBUG_PORT        PORTF
