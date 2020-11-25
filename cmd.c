@@ -13,7 +13,6 @@
 
 #include "version.h"
 #include "cmd.h"
-#include "config.h"
 
 static struct cmd {
   char buffer[TXBUF];
@@ -59,12 +58,13 @@ static uint8_t cmd_trace( struct cmd *cmd ) {
 
 static uint8_t cmd_version( struct cmd *cmd __attribute__((unused))) {
   // There are no parameters
-  command.n = sprintf_P( command.buffer, PSTR("# %s %d.%d.%d c=%d s=%d\r\n"),BRANCH,MAJOR,MINOR,SUBVER,CCSEL,SPI_SS);
+  command.n = sprintf_P( command.buffer, PSTR("# %s %d.%d.%d\r\n"),BRANCH,MAJOR,MINOR,SUBVER);
   return 1;
 }
 
 //------------------------------------------------------------------------
-static uint8_t cmd_dfu_start_bootloader( struct cmd *cmd __attribute__((unused))) {
+#if defined(DFU)
+static void dfu_start_bootloader(void) {
   UDCON = 1;
   USBCON = (1<<FRZCLK);  // disable USB
   UCSR1B = 0;
@@ -76,8 +76,16 @@ static uint8_t cmd_dfu_start_bootloader( struct cmd *cmd __attribute__((unused))
   MCUCR = _BV(IVCE);
   MCUCR = _BV(IVSEL);
   asm volatile("jmp 0x3800");
-  return 1;
 }
+#endif
+
+static uint8_t cmd_boot(struct cmd *cmd __attribute__((unused))) {
+#if defined(DFU)
+  dfu_start_bootloader();
+#endif
+  return 0;
+}
+
 //------------------------------------------------------------------------
 
 static uint8_t check_command( struct cmd *cmd ) {
@@ -87,7 +95,7 @@ static uint8_t check_command( struct cmd *cmd ) {
     switch( cmd->buffer[0] & ~( 'A'^'a' ) ) {
     case 'V':  validCmd = cmd_version( cmd );       break;
     case 'T':  validCmd = cmd_trace( cmd );         break;
-    case 'B':  validCmd = cmd_dfu_start_bootloader( cmd );         break;
+    case 'B':  validCmd = cmd_boot( cmd );          break;
     }
   }
 
@@ -99,8 +107,7 @@ uint8_t cmd( uint8_t byte, char **buffer, uint8_t *n ) {
     reset_command();
     command.inCmd = 1;
   } else if( command.inCmd ) {
-    if( byte=='\r' )
- {
+    if( byte=='\r' ) {
       if( command.n==0 ) {
         command.inCmd = 0;
       } else {
