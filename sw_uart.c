@@ -7,6 +7,7 @@
 */
 
 #include "config.h"
+#if defined(SWUART)
 
 #include <string.h>
 #include <util/delay.h>
@@ -429,7 +430,6 @@ static void rx_stop(void) {
 enum uart_tx_states {
   TX_OFF,
   TX_IDLE,
-  TX
 };
 
 
@@ -441,6 +441,7 @@ static struct uart_tx_state {
 
   uint8_t byte;
   uint8_t bitNo;
+  uint8_t done;
 } tx;
 
 static void tx_reset(void) {
@@ -463,8 +464,10 @@ ISR(TIMER0_COMPA_vect) {
   if( bit ) GDO0_PORT |=  GDO0_IN ;
   else      GDO0_PORT &= ~GDO0_IN ;
 
-  if( tx.bitNo==0 ) tx.byte = frame_tx_byte();
-  tx.bitNo = ( tx.bitNo+1 ) % 10;
+  if( tx.bitNo==0 )
+  	tx.done = frame_tx_byte(&(tx.byte));
+  if( !tx.done )
+    tx.bitNo = ( tx.bitNo+1 ) % 10;
 
   DEBUG_ISR(0);
 }
@@ -542,6 +545,9 @@ void uart_disable(void) {
   SREG = sreg;
 }
 
+void uart_work(void) {
+}
+
 void uart_init(void) {
   uint8_t sreg = SREG;
   cli();
@@ -558,3 +564,4 @@ void uart_init(void) {
   SREG = sreg;
 }
 
+#endif // SWUART

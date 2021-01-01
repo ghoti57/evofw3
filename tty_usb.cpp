@@ -1,16 +1,19 @@
 /**************************************************************************
-** tty.c
+** tty_usb.cpp
 **
-** Host facing UART
+** Note:
+**   This must be a CPP file to allow it to use the Serial class correctly
+**
+** Host facing USB
 */
-#include <avr/interrupt.h>
-
+#include "arduino.h"
 #include "config.h"
-#include "trace.h"
-#include "tty.h"
 
-#define DEBUG_TX(_v)
-#define DEBUG_RX(_v)  DEBUG5(_v)
+#if defined(TTY_USB)
+extern "C" {
+
+#include "tty.h"
+#include "HardwareSerial.h"
 
 /**************************************************************************
 ** TX
@@ -36,7 +39,7 @@ static volatile uint8_t echo = 0;
 static void tty_do_tx( void ) {
   uint8_t byte;
 
-  if( UCSR0A & ( 1<<UDRE0 ) ) { // TX buffer is empty
+  if( Serial.availableForWrite() ) { // TX buffer not full
     if( rxControl ) { // RX Flow control takes priority
       byte = rxControl;
       rxControl = 0;
@@ -48,9 +51,7 @@ static void tty_do_tx( void ) {
     }
 
     if( byte != 0x00 ) {
-      DEBUG_TX(1);
-      UDR0 = byte;
-      DEBUG_TX(0);
+      Serial.write(byte);
     }
   }
 }
@@ -139,126 +140,28 @@ uint8_t tty_rx_get(void) {
 }
 
 static void tty_do_rx() {
-  if( UCSR0A & ( 1<<RXC0 ) ) { // RX buffer is full
-    uint8_t byte = UDR0;
-    sei();  // Mustn't risk delaying RX edge ISR
-    DEBUG_RX(0);
+  if( Serial.available() ) { // RX data available
+    uint8_t byte = Serial.read();
     tty_rx_put( byte );
   }
-}
-
-/**************************************************************************
-** TX Control
-*/
-void tty_start_tx(void) {
-  uint8_t sreg = SREG;
-  cli();
-
-  UCSR0B &= ~( 1<<UDRIE0 );
-  UCSR0B |=  ( 1<<TXEN0 );
-
-  SREG = sreg;
-}
-
-void tty_stop_tx(void) {
-  uint8_t sreg = SREG;
-  cli();
-
-  UCSR0B &= ~( 1<<TXEN0 );
-  UCSR0B &= ~( 1<<UDRIE0 );
-
-  SREG = sreg;
-}
-
-/**************************************************************************
-** RX ISR
-*/
-
-ISR(TTY_RX_VECT) {
-  DEBUG_RX(1);
-  tty_do_rx();
-  DEBUG_RX(0);
-}
-
-void tty_start_rx(void) {
-  uint8_t sreg = SREG;
-  cli();
-
-  // Enable the interrupt while disabled - RX buffer will be empty
-  UCSR0B |= ( 1<<RXCIE0 );
-
-  // Then enable RX
-  UCSR0B |= ( 1<<RXEN0 );
-
-  SREG = sreg;
-}
-
-void tty_stop_rx(void) {
-  uint8_t sreg = SREG;
-  cli();
-
-  ttyRx_in = ttyRx_out = 0;
-
-  UCSR0B &= ~( 1<<RXEN0 );
-  UCSR0B &= ~( 1<<RXCIE0 );
-
-  SREG = sreg;
 }
 
 /**************************************************************************
 ** Initialisation
 */
 
-static void tty_init_uart( uint32_t Fosc, uint32_t bitrate )
-{
-  uint32_t ubrr_0, actual_0, error_0;
-  uint32_t ubrr_1, actual_1, error_1;
-
-  ubrr_0  = bitrate*8;  // Rounding adjustment
-  ubrr_0 += Fosc;
-  ubrr_0 /= 16;
-  ubrr_0 /= bitrate;
-  ubrr_0 -= 1;
-
-  actual_0  = Fosc / 16;
-  actual_0 /= ubrr_0+1;
-
-  ubrr_1  = bitrate*4;  // Rounding adjustment
-  ubrr_1 += Fosc;
-  ubrr_1 /= 8;
-  ubrr_1 /= bitrate;
-  ubrr_1 -= 1;
-
-  actual_1  = Fosc / 8;
-  actual_1 /= ubrr_1+1;
-
-  error_0 = ( actual_0 > bitrate ) ? actual_0 - bitrate : bitrate - actual_0;
-  error_1 = ( actual_1 > bitrate ) ? actual_1 - bitrate : bitrate - actual_1;
-  if( error_0 <= error_1 ) {  // Prefer U2X0=0
-    UCSR0A = 0;
-    UBRR0 = ubrr_0;
-  } else {
-    UCSR0A = ( 1 << U2X0 );
-    UBRR0 = ubrr_1;
-  }
-
-  UCSR0B = ( 0 << RXCIE0 ) | ( 0 << TXCIE0 ) | ( 0 << UDRIE0 )  // Interrupts disabled
-         | ( 0 << RXEN0  ) | ( 0 << TXEN0  )                    // RX+TX disabled
-         | ( 0 << UCSZ02 );                                     // 8 Bits
-
-  UCSR0C  = ( 0 << UMSEL01 ) | ( 0 << UMSEL00 )   // Asynchronous
-          | ( 0 << UPM01   ) | ( 0 << UPM00   )   // Parity disable
-          | ( 0 << USBS0   )                      // 1 stop bit
-          | ( 1 << UCSZ01  ) |  ( 1 << UCSZ00 )   // 8 data bits
-          | ( 0 << UCPOL0  );
-}
+void tty_debug(const char *str) { Serial.print(str); }
 
 void tty_init(void ) {
-  tty_init_uart( F_CPU, TTY_BAUD_RATE );
-  tty_start_tx();
-  tty_start_rx();
+  Serial.begin(115200);
+  while( !Serial ){}
 }
 
 void tty_work(void) {
   tty_do_tx();
+  tty_do_rx();
 }
+
+} // extern "C" {
+#endif // TTY_USB
+

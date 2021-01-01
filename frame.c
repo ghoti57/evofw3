@@ -289,8 +289,8 @@ void frame_tx_start( uint8_t *raw, uint8_t nRaw ) {
   txFrm.state = FRM_TX_READY;
 }
 
-uint8_t frame_tx_byte(void) {
-  uint8_t byte = 0x00;
+uint8_t frame_tx_byte(uint8_t *byte) {
+  uint8_t done = 0;
 
   switch( txFrm.state ) {
   case FRM_TX_IDLE:
@@ -299,7 +299,7 @@ uint8_t frame_tx_byte(void) {
 
   case FRM_TX_PREFIX:
     if( txFrm.count < sizeof(tx_prefix) ) {
-      byte = tx_prefix[txFrm.count++];
+      (*byte) = tx_prefix[txFrm.count++];
       break;
     }
     txFrm.count = 0;
@@ -308,7 +308,7 @@ uint8_t frame_tx_byte(void) {
 
   case FRM_TX_MESSAGE:
     if( txFrm.count < txFrm.nBytes ) {
-      byte = txFrm.raw[ txFrm.count++ ];
+      (*byte) = txFrm.raw[ txFrm.count++ ];
 	  break;
     } 
 
@@ -320,7 +320,9 @@ uint8_t frame_tx_byte(void) {
 
   case FRM_TX_SUFFIX:
     if( txFrm.count < sizeof(tx_suffix) ) {
-      byte = tx_suffix[txFrm.count++];
+      (*byte) = tx_suffix[txFrm.count++];
+      if( txFrm.count == sizeof(tx_suffix) )
+        done = 1;
       break;
     }
     txFrm.count = 0;
@@ -328,10 +330,11 @@ uint8_t frame_tx_byte(void) {
     // Fall through
 
   case FRM_TX_DONE:
+  	done = 1;
     break;
   }
 
-  return byte;
+  return done;
 }
 
 static void frame_tx_done(void) {
@@ -381,6 +384,7 @@ void frame_init(void) {
 
 
 void frame_work(void) {
+  uart_work();
   switch( frame.state ) {
   case FRM_IDLE:
     if( rxFrm.state==FRM_RX_OFF ) {
@@ -392,7 +396,7 @@ void frame_work(void) {
     if( rxFrm.state>=FRM_RX_DONE ) {
       frame_rx_done();
     }
-    if( rxFrm.state<=FRM_RX_IDLE ) {
+    if( rxFrm.state<FRM_RX_MESSAGE ) {
       if( txFrm.state==FRM_TX_READY ) {
         frame_tx_enable();
       } else if( rxFrm.state==FRM_RX_OFF ) {

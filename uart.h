@@ -10,6 +10,7 @@ extern void uart_tx_enable(void);
 extern void uart_disable(void);
 
 extern void uart_init(void);
+extern void uart_work(void);
 
 #define RADIO_BAUDRATE 38400
 

@@ -18,11 +18,12 @@
 #define SPI_PORT    PORTB
 #define SPI_PIN     PINB
 #define SPI_DDR     DDRB
-#define SPI_SS      2
+#define SPI_SS      CCSEL
 #define SPI_MOSI    3
 #define SPI_MISO    4
 #define SPI_SCLK    5
 
+#if defined SWUART
 // GDO0 connection
 #if( GDO0==INT0 )
   #define GDO0_INT_MASK   ( 1 << INT0 )
@@ -77,6 +78,7 @@
 #define SW_INT_PIN       PINB
 #define SW_INT_DDR       DDRB
 #define SW_INT_IN        ( 1<<PORTB0 )
+#endif // SWUART
 
 // SOme debug pins
 #define DEBUG_PORT        PORTC
@@ -89,6 +91,7 @@
 #define DEBUG_PIN6        ( 1<<PORTC6 )
 
 // TTY USART
+#define TTY_USART
 #define TTY_UDRE_VECT   USART_UDRE_vect
 #define TTY_RX_VECT     USART_RX_vect
 
