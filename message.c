@@ -671,7 +671,7 @@ static uint8_t msg_scan_addr( struct message *msg, char *str, uint8_t nChar ) {
   	if( nChar<11 && 2==sscanf( str, "%hhu:%lu", &class, &id ) ) {
 
 	  // Specific address for this device
-      if( class==18 && id==730 ) {
+      if( addr==0 && class==18 && id==730 ) {
         class = MyClass;		  
         id = MyID;
       }
