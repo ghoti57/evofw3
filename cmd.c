@@ -10,6 +10,7 @@
 #include <stdio.h>
 
 #include "tty.h"
+#include "cc1101.h"
 
 #include "version.h"
 #include "cmd.h"
@@ -87,6 +88,45 @@ static uint8_t cmd_boot(struct cmd *cmd __attribute__((unused))) {
 }
 
 //------------------------------------------------------------------------
+// !C <offset> <data> [<data> ...]
+static uint8_t cmd_cc1101(struct cmd *cmd) {
+  uint8_t validCmd = 0;
+
+  uint8_t nParam=0;
+  uint8_t param[CC_MAX_PARAM];
+  uint8_t start,end;
+  uint8_t n = cmd->n;
+  
+  // Skip command character
+  end = start = 1;
+  
+  while( n > end ) {
+    while( n>start && cmd->buffer[start]==' ' ) start++;	// Skip spaces
+    end = start;
+    while( n>end && cmd->buffer[end]!=' ' ) end++;	// find end of param
+
+    if( end>start )
+      param[nParam++] = get_hex( end-start, cmd->buffer+start );
+
+    start = end;
+    if( nParam < CC_MAX_PARAM )
+      continue;
+  }
+
+  if( nParam ) {
+    cmd->n = sprintf_P( cmd->buffer, PSTR("!%c"), cmd->buffer[0] );
+    for( n=0 ; n<nParam ; n++ )
+     cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" %02x"), param[n] );
+    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("\r\n") );
+	validCmd = 1;
+
+	cc_param( nParam, param );
+  }
+
+  return validCmd;
+}
+
+//------------------------------------------------------------------------
 
 static uint8_t check_command( struct cmd *cmd ) {
   uint8_t validCmd = 0;
@@ -96,6 +136,7 @@ static uint8_t check_command( struct cmd *cmd ) {
     case 'V':  validCmd = cmd_version( cmd );       break;
     case 'T':  validCmd = cmd_trace( cmd );         break;
     case 'B':  validCmd = cmd_boot( cmd );          break;
+    case 'C':  validCmd = cmd_cc1101( cmd );        break;
     }
   }
 
