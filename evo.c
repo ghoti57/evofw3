@@ -3,6 +3,7 @@
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include <avr/boot.h>
+#include <avr/power.h>
 
 #include "config.h"
 #include "led.h"
@@ -26,6 +27,8 @@ void main_init(void) {
 #endif
 
   wdt_disable();
+  clock_prescale_set(clock_div_1);
+  
   led_init();
   tty_init();
 
