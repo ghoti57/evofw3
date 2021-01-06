@@ -136,6 +136,27 @@ uint8_t cc_read_rssi(void) {
   return (uint8_t)( -rssi ); // returns 10 to 138
 }
 
+uint8_t cc_param( uint8_t nParam, uint8_t *param ) {
+  uint8_t valid = 0;
+  
+  if( nParam>1 ) {
+  	if( param[0] < 0x30 ) {
+      uint8_t i;
+      uint8_t reg = param[0];
+      EIMSK &= ~INT_MASK;			 // Disable interrupts
+
+      cc_enter_idle_mode();
+      for( i=1 ; i<nParam ; i++,reg++ )
+        cc_write( reg, param[i] );
+      cc_enter_rx_mode();
+
+	  EIFR	|= INT_MASK;		  // Acknowledge any  previous edges
+  	}
+  }
+
+  return valid;
+}
+
 void cc_init(void) {
   spi_init();
 
