@@ -114,7 +114,7 @@ static uint8_t cmd_cc1101(struct cmd *cmd) {
   }
 
   if( nParam ) {
-    cmd->n = sprintf_P( cmd->buffer, PSTR("!%c"), cmd->buffer[0] );
+    cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c"), cmd->buffer[0] );
     for( n=0 ; n<nParam ; n++ )
      cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" %02x"), param[n] );
     cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("\r\n") );
