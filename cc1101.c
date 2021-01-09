@@ -143,14 +143,14 @@ uint8_t cc_param( uint8_t nParam, uint8_t *param ) {
   	if( param[0] < 0x30 ) {
       uint8_t i;
       uint8_t reg = param[0];
-      EIMSK &= ~INT_MASK;			 // Disable interrupts
+      uint8_t eimsk = EIMSK;
 
       cc_enter_idle_mode();
       for( i=1 ; i<nParam ; i++,reg++ )
         cc_write( reg, param[i] );
       cc_enter_rx_mode();
 
-	  EIFR	|= INT_MASK;		  // Acknowledge any  previous edges
+	  EIMSK = eimsk;
   	}
   }
 
