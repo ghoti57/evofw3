@@ -6,7 +6,6 @@
 **
 ********************************************************/
 #include <stddef.h>
-#include <avr/pgmspace.h>
 
 #include "tty.h"
 #include "cmd.h"
@@ -27,8 +26,8 @@ static uint8_t inCmd;
 static char *cmdBuff;
 static uint8_t nCmd;
 
-void gateway_init( uint32_t myId ) {
-  MyId = myId;
+void gateway_init( uint32_t myID ) {
+  MyId = myID;
 
   cc_init();
   frame_init();
@@ -43,7 +42,7 @@ void gateway_init( uint32_t myId ) {
 void gateway_work( void ) {
   static struct message *rx = NULL;
   static struct message *tx = NULL;
-  uint8_t byte;
+  uint8_t byte; 
 
   frame_work();
   msg_work();
@@ -85,13 +84,14 @@ void gateway_work( void ) {
   
   // Process message bytes
   if( byte ) {
-	if( !tx ) tx = msg_alloc();
+    if( !tx ) tx = msg_alloc();
 
     if( tx ) { // TX message
       if( msg_scan( tx, byte ) ) {
-		msg_change_addr( tx,0, GWAY_CLASS,GWAY_ID , MyClass,MyId );  
+        msg_change_addr( tx,0, GWAY_CLASS,GWAY_ID , MyClass,MyId );
         msg_tx_ready( &tx );
-	  }
+      }
     }
   }
+
 }

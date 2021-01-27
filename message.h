@@ -44,6 +44,7 @@ extern struct message *msg_alloc(void);
 // RX messages
 extern struct message *msg_rx_get(void);
 extern uint8_t msg_print( struct message *msg, char *msgBuff );
+extern void msg_change_addr( struct message *msg, uint8_t addr, uint8_t Class,uint32_t Id , uint8_t myClass,uint32_t myId );
 
 // TX Messages
 extern void msg_tx_ready( struct message **msg );
