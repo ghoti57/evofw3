@@ -7,17 +7,13 @@
 
 #include "config.h"
 #include "led.h"
-
-#include "spi.h"
-#include "cc1101.h"
-
-#include "frame.h"
-#include "message.h"
 #include "tty.h"
+#include "spi.h"
+
+#include "gateway.h"
 
 void main_init(void) {
-  uint8_t  myClass = 18;
-  uint32_t myId = 0x4DADA;
+  uint32_t myId;
 
   // OSCCAL=((uint32_t)OSCCAL * 10368) / 10000;
 
@@ -31,24 +27,19 @@ void main_init(void) {
   
   led_init();
   tty_init();
+  spi_init();
 
   myId =(  ( (uint32_t)boot_signature_byte_get(0x15) << 16 )
   	     + ( (uint32_t)boot_signature_byte_get(0x16) <<  8 )
          + ( (uint32_t)boot_signature_byte_get(0x17) <<  0 )
         );
-       
-  // Wire up components
-  spi_init();
-  cc_init();
-  frame_init();
-  msg_init( myClass, myId );
+  gateway_init( myId );
 
   sei();
 }
 
 void main_work(void) {
-  frame_work();
-  msg_work();
+  gateway_work();
   tty_work();
 }
 

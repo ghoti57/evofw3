@@ -11,9 +11,7 @@
 #include <avr/pgmspace.h>
 
 #include "config.h"
-#include "tty.h"
 #include "trace.h"
-#include "cmd.h"
 
 #include "frame.h"
 #include "message.h"
@@ -102,7 +100,7 @@ struct msg_list {
   uint8_t out;
 };
 
-void msg_put( struct msg_list *list, struct message **ppMsg, uint8_t reset ) {
+static void msg_put( struct msg_list *list, struct message **ppMsg, uint8_t reset ) {
   if( ppMsg != NULL ) {
     struct message *pMsg = (*ppMsg);
       if( pMsg != NULL ) {
@@ -133,8 +131,8 @@ static struct message *msg_get( struct msg_list *list ) {
 ** Message structure pool
 ********************************************************/
 static struct msg_list msg_pool;
-static void msg_free( struct message **msg ) { msg_put( &msg_pool, msg, 1 ); }
-static struct message *msg_alloc(void) {  return msg_get( &msg_pool); }
+void msg_free( struct message **msg ) { msg_put( &msg_pool, msg, 1 ); }
+struct message *msg_alloc(void) {  return msg_get( &msg_pool); }
 
 static void msg_create_pool(void) {
   static struct message MSG[N_MSG];
@@ -150,14 +148,14 @@ static void msg_create_pool(void) {
 ********************************************************/
 static struct msg_list rx_list;
 static void msg_rx_ready( struct message **msg ) { msg_put( &rx_list, msg, 0 ); }
-static struct message *msg_rx_get(void) { return msg_get( &rx_list ); }
+struct message *msg_rx_get(void) { return msg_get( &rx_list ); }
 
 
 /********************************************************
 ** Transmit Message list
 ********************************************************/
 static struct msg_list tx_list;
-static void msg_tx_ready( struct message **msg ) { msg_put( &tx_list, msg, 0 ); }
+void msg_tx_ready( struct message **msg ) { msg_put( &tx_list, msg, 0 ); }
 static struct message *msg_tx_get(void) {  return msg_get( &tx_list ); }
 
 /********************************************************
@@ -460,24 +458,15 @@ static uint8_t msg_print_field( struct message *msg, char *buff ) {
 ** progress
 **/
 
-static uint8_t msg_print( struct message *msg ) {
-  static char msg_buff[TXBUF];
-  static uint8_t n;
+uint8_t msg_print( struct message *msg, char *msg_buff ) {
+  uint8_t n;
 
   if( msg->state == S_START ) {
     DEBUG_MSG(1);
     msg->count = 0;
-    n = 0;
   }
 
-  // Do we still have outstanding text to send?
-  if( n ) {
-    n -= tty_put_str( (uint8_t *)msg_buff, n );
-  }
-
-  if( !n ) {
-    n = msg_print_field( msg, msg_buff );
-  }
+  n = msg_print_field( msg, msg_buff );
 
   if( msg->state == S_COMPLETE )
     DEBUG_MSG(0);
@@ -638,9 +627,6 @@ void msg_rx_end( uint8_t nBytes, uint8_t error ) {
 /********************************************************
 ** TX Message scan
 ********************************************************/
-static uint8_t  MyClass = 18;
-static uint32_t MyID = 0x4DADA;
-
 static uint8_t msg_scan_header( struct message *msg, char *str, uint8_t nChar ) {
   uint8_t ok = 0;
   uint8_t msgType;
@@ -660,6 +646,23 @@ static uint8_t msg_scan_header( struct message *msg, char *str, uint8_t nChar ) 
   return ok;
 }
 
+void msg_change_addr( struct message *msg, uint8_t addr, uint8_t Class,uint32_t Id , uint8_t myClass,uint32_t myId ) {
+  if( msg && ( msg->fields & ( F_ADDR0 << addr ) ) ) { // Message contains specified address field
+    uint8_t *Addr = msg->addr[addr];
+    uint8_t class = ( Addr[0] & 0xFC ) >>  2;
+	if( class==Class ) { // Class matches
+      uint32_t id = (uint32_t)( Addr[0] & 0x03 ) << 16
+                  | (uint32_t)( Addr[1]        ) <<  8
+                  | (uint32_t)( Addr[2]        )       ;
+	  if( id==Id ) { // ID matches
+        Addr[0] = ( myClass<< 2 ) | ( ( myId >> 16 ) & 0x03 );
+        Addr[1] =                   ( ( myId >>  8 ) & 0xFF );
+        Addr[2] =                   ( ( myId       ) & 0xFF );
+	  }
+	}
+  }
+}
+
 static uint8_t msg_scan_addr( struct message *msg, char *str, uint8_t nChar ) {
   uint8_t ok = 0;
   uint8_t addr = msg->state - S_ADDR0;
@@ -669,12 +672,6 @@ static uint8_t msg_scan_addr( struct message *msg, char *str, uint8_t nChar ) {
     uint32_t id;
 
   	if( nChar<11 && 2==sscanf( str, "%hhu:%lu", &class, &id ) ) {
-
-	  // Specific address for this device
-      if( addr==0 && class==18 && id==730 ) {
-        class = MyClass;		  
-        id = MyID;
-      }
 
       msg->addr[addr][0] = ( class<< 2 ) | ( ( id >> 16 ) & 0x03 );
       msg->addr[addr][1] =                 ( ( id >>  8 ) & 0xFF );
@@ -751,7 +748,7 @@ static uint8_t msg_scan_payload( struct message *msg, char *str, uint8_t nChar )
   return ok;
 }
 
-static uint8_t msg_scan( struct message *msg, uint8_t byte) {
+uint8_t msg_scan( struct message *msg, uint8_t byte ) {
   static char field[17];
   static uint8_t nChar=0;
   uint8_t ok = 1;
@@ -1032,71 +1029,18 @@ void msg_tx_done(void) {
 **
 **/
 
-static uint8_t inCmd;
-static char *cmdBuff;
-static uint8_t nCmd;
-
 void msg_work(void) {
-  static struct message *rx = NULL;
-  static struct message *tx = NULL;
-
-  uint8_t byte;
-
-  // Print RX messages
-  if( rx ) {
-    if( !msg_print( rx ) ) {
-      msg_free( &rx );
-    }
-  } else if( nCmd ) {
-    nCmd -= tty_put_str( (uint8_t *)cmdBuff, nCmd );
-    if( !nCmd )
-      inCmd = 0;
-  } else {
-    // If we have a message now we'll start printing it next time
-    rx = msg_rx_get();
-  }
-
-  // Process serial data from host
-  if( !tx ) tx = msg_alloc();
-
-  byte = tty_rx_get();
-  if( byte ) {
-    if( !tx || tx->state==S_START ) {
-      if( !nCmd && ( byte==CMD || inCmd ) ) {
-        inCmd = cmd( byte, &cmdBuff, &nCmd );
-        byte = '\0'; // byte has been used
-      }
-    }
-  }
-
-  if( byte ) {  // Still have an unused byte
-    if( tx ) { // TX message
-      if( msg_scan( tx, byte ) )
-        msg_tx_ready( &tx );
-    }
-  }
-
-  if( !TxMsg ) {
+ if( !TxMsg ) {
     struct message *tx1 = msg_tx_get();
     if( tx1 )
       msg_tx_start( &tx1 );
   }
-
 }
 
 /********************************************************
 ** System startup
 ********************************************************/
 
-void msg_init( uint8_t myClass, uint32_t myID ) {
-  MyClass = myClass;
-  MyID = myID;
-
+void msg_init( void ) {
   msg_create_pool();
-
-  // Force a version string to be printed
-  inCmd = cmd(CMD, NULL,NULL );
-  inCmd = cmd('V', NULL,NULL );
-  inCmd = cmd('\r', &cmdBuff, &nCmd );
 }
-
