@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #define TRC_RAW    0x01
+#define TRC_ERROR  0x02
 
 extern uint8_t trace0;
 
