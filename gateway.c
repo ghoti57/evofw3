@@ -9,6 +9,7 @@
 
 #include "tty.h"
 #include "cmd.h"
+#include "trace.h"
 
 #include "cc1101.h"
 #include "frame.h"
@@ -69,6 +70,10 @@ void gateway_work( void ) {
   } else {
     // If we get a message now we'll start printing it next time
     rx = msg_rx_get();
+	if( !msg_isValid(rx) ) {
+	  if( !TRACE(TRC_ERROR) )
+        msg_free(&rx);	// Silently dump error messages
+	}
   }
 
   // Process serial data from host
