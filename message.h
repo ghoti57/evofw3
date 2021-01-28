@@ -41,6 +41,9 @@ struct message;
 extern void msg_free( struct message **msg );
 extern struct message *msg_alloc(void);
 
+extern uint8_t msg_isValid( struct message *msg );
+extern uint8_t msg_isTx( struct message *msg );
+
 // RX messages
 extern struct message *msg_rx_get(void);
 extern uint8_t msg_print( struct message *msg, char *msgBuff );
