@@ -956,7 +956,7 @@ static uint8_t msg_tx_checksum( struct message *msg, uint8_t *done ) {
 }
 
 static uint8_t msg_tx_process( struct message *msg, uint8_t *done ) {
-  uint8_t byte = 0, d;
+  uint8_t byte = 0, d=1;
 
   switch( msg->state ) {
   case S_START:
@@ -1018,6 +1018,30 @@ void msg_tx_done(void) {
     // Echo what we transmitted
     msg_rx_ready( &TxMsg );
   }
+}
+
+/************************************************************************************
+**
+** Message status functions
+**/
+uint8_t msg_isValid( struct message *msg ) {
+  uint8_t isValid = 0;
+  
+  if( msg ) {
+	isValid = ( msg->error==MSG_OK );
+  }
+  
+  return isValid;
+}
+
+uint8_t msig_isTx( struct message *msg ) {
+  uint8_t isTx = 0;
+  
+  if( msg ) {
+	isTx = msg_isValid( msg ) && ( msg->rssi==0 );
+  }
+
+  return isTx;
 }
 
 /************************************************************************************
