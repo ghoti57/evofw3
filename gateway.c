@@ -18,7 +18,7 @@
 #include "gateway.h"
 
 #define GWAY_CLASS 18
-#define GWAY_ID 0x4DADA
+#define GWAY_ID 730
 
 static uint8_t  MyClass = GWAY_CLASS;
 static uint32_t MyId = GWAY_ID;
