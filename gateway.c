@@ -15,6 +15,7 @@
 #include "frame.h"
 #include "message.h"
 
+#include "cc1101_tune.h"
 #include "gateway.h"
 
 #define GWAY_CLASS 18
@@ -64,16 +65,22 @@ void gateway_work( void ) {
         msg_free( &rx );
 	}
   } else if( nCmd ) {
-    nCmd -= tty_put_str( (uint8_t *)cmdBuff, nCmd );
+    nCmd -= tty_put_str( (uint8_t *)cmdBuff, nCmd ); 
     if( !nCmd )
       inCmd = 0;
   } else {
     // If we get a message now we'll start printing it next time
     rx = msg_rx_get();
-	if( !msg_isValid(rx) ) {
-	  if( !TRACE(TRC_ERROR) )
+    if( cc_tuneEnabled() ) {
+	  char cmdStr[TXBUF];
+      uint8_t nChar = cc_tune_work( rx, cmdStr );
+	  if( nChar ) {
+        inCmd = cmd_str( cmdStr, &cmdBuff, &nCmd );
+	  }
+	} else if( rx && !msg_isValid(rx) ) {
+      if( !TRACE(TRC_ERROR) )
         msg_free(&rx);	// Silently dump error messages
-	}
+    }
   }
 
   // Process serial data from host
