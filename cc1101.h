@@ -14,6 +14,7 @@
 
 #define CC_MAX_PARAM 5
 extern uint8_t cc_param( uint8_t nParam, uint8_t *param );
+extern void cc_param_read( uint8_t reg, uint8_t nReg, uint8_t *data );
 
 extern uint8_t cc_read_rssi(void);
 

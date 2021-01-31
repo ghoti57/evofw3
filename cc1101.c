@@ -157,6 +157,15 @@ uint8_t cc_param( uint8_t nParam, uint8_t *param ) {
   return valid;
 }
 
+void cc_param_read( uint8_t reg, uint8_t nReg, uint8_t *data ) {
+  if( data ) {
+    while( nReg && reg<0x30 ) {
+      (*data) = cc_read( reg );
+	  reg++;  nReg--; data++;
+    }
+  }
+}
+
 void cc_init(void) {
   spi_init();
 
