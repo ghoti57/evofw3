@@ -115,26 +115,23 @@ static uint8_t cmd_cc1101(struct cmd *cmd) {
       continue;
   }
 
-  cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c "), cmd->buffer[0] );
   if( nParam ) {
-    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("%02x "), param[0] );
+    cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c"), cmd->buffer[0] );
+    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" %02x"), param[0] );
     for( n=1 ; n<nParam ; n++ )
-     cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("%02x"), param[n] );
+     cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" %02x"), param[n] );
+    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("\r\n") );
 
 	cc_param( nParam, param );
 	validCmd = 1;
-  } else {
-	cc_param_read( CC1100_FREQ2, 3, param );
-	cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("FREQ=%02x%02x%02x"), param[0],param[1],param[2] );
-	validCmd = 1;
   }
-  cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("\r\n") );
 
   return validCmd;
 }
 
 static uint8_t cmd_cc_tune(struct cmd *cmd) {
   uint8_t validCmd = 0;
+  uint8_t param[CC_MAX_PARAM];
 
   if( cmd->n > 1 ) {
     uint8_t enable = get_hex( cmd->n-1, cmd->buffer+1 );
@@ -146,10 +143,11 @@ static uint8_t cmd_cc_tune(struct cmd *cmd) {
 
 	validCmd = 1;
   } else {
-    cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c "), cmd->buffer[0] );
-	if( !cc_tuneEnabled() )
-     cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("not "));
-    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("enabled\r\n"));
+	cc_param_read( CC1100_FREQ2, 3, param );
+    cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c"), cmd->buffer[0] );
+	cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" F=%02x%02x%02x"), param[0],param[1],param[2] );
+	if( cc_tuneEnabled() )
+    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" tuning\r\n"));
 	validCmd = 1;
   }
   
