@@ -11,6 +11,8 @@
 
 #include "tty.h"
 #include "cc1101.h"
+#include "cc1101_const.h"
+#include "cc1101_tune.h"
 
 #include "version.h"
 #include "cmd.h"
@@ -44,12 +46,12 @@ static uint8_t get_hex( uint8_t len, char *param ) {
   return value;
 }
 
-uint8_t trace0 = 0;// TRC_RAW;
+uint8_t trace0 = 0;
 static uint8_t cmd_trace( struct cmd *cmd ) {
-
+  
   if( cmd->n > 1 )
     trace0 = get_hex( cmd->n-1, cmd->buffer+1 );
-
+  
   command.n = sprintf_P( command.buffer, PSTR("# !T=%02x\r\n"),trace0);
 
   return 1;
@@ -113,16 +115,44 @@ static uint8_t cmd_cc1101(struct cmd *cmd) {
       continue;
   }
 
+  cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c "), cmd->buffer[0] );
   if( nParam ) {
-    cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c"), cmd->buffer[0] );
-    for( n=0 ; n<nParam ; n++ )
-     cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" %02x"), param[n] );
-    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("\r\n") );
-	validCmd = 1;
+    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("%02x "), param[0] );
+    for( n=1 ; n<nParam ; n++ )
+     cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("%02x"), param[n] );
 
 	cc_param( nParam, param );
+	validCmd = 1;
+  } else {
+	cc_param_read( CC1100_FREQ2, 3, param );
+	cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("FREQ=%02x%02x%02x"), param[0],param[1],param[2] );
+	validCmd = 1;
   }
+  cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("\r\n") );
 
+  return validCmd;
+}
+
+static uint8_t cmd_cc_tune(struct cmd *cmd) {
+  uint8_t validCmd = 0;
+
+  if( cmd->n > 1 ) {
+    uint8_t enable = get_hex( cmd->n-1, cmd->buffer+1 );
+	cc_tune_enable( enable );
+
+    cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c "), cmd->buffer[0] );
+    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("%d"), (enable)?1:0 );
+    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("\r\n") );
+
+	validCmd = 1;
+  } else {
+    cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c "), cmd->buffer[0] );
+	if( !cc_tuneEnabled() )
+     cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("not "));
+    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("enabled\r\n"));
+	validCmd = 1;
+  }
+  
   return validCmd;
 }
 
@@ -137,6 +167,7 @@ static uint8_t check_command( struct cmd *cmd ) {
     case 'T':  validCmd = cmd_trace( cmd );         break;
     case 'B':  validCmd = cmd_boot( cmd );          break;
     case 'C':  validCmd = cmd_cc1101( cmd );        break;
+    case 'F':  validCmd = cmd_cc_tune( cmd );       break;
     }
   }
 
@@ -152,7 +183,7 @@ uint8_t cmd( uint8_t byte, char **buffer, uint8_t *n ) {
       if( command.n==0 ) {
         command.inCmd = 0;
       } else {
-       command.inCmd = check_command( &command );
+        command.inCmd = check_command( &command );
         if( command.inCmd ) {
           if( buffer ) (*buffer) = command.buffer;
           if( n ) (*n) = command.n;
@@ -167,4 +198,17 @@ uint8_t cmd( uint8_t byte, char **buffer, uint8_t *n ) {
   }
 
   return command.inCmd;
+}
+
+uint8_t cmd_str( char *str, char **buffer, uint8_t *n ) {
+  uint8_t inCmd=0;
+  uint8_t i;
+  
+  if( str ) {
+    inCmd = 1;
+    for( i=0 ; inCmd && str[i]!='\0' ; i++ )
+      inCmd = cmd( str[i], buffer, n );
+  }
+  
+  return inCmd;
 }
