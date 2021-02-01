@@ -213,6 +213,40 @@ static uint8_t get_header( uint8_t flags ) {
 }
 
 /********************************************************
+** General utilities
+********************************************************/
+static uint8_t msg_checksum( struct message *msg ) {
+  uint8_t csum;
+  uint8_t i,j;
+  
+  // Missing fields will be zero so we can just add them to checksum without testing presence
+                                                  { csum  = get_header(msg->fields); }
+  for( i=0 ; i<3 ; i++ ) { for( j=0 ; j<3 ; j++ ) { csum += msg->addr[i][j]; }       }
+  for( i=0 ; i<2 ; i++ )                          { csum += msg->param[i];           }
+  for( i=0 ; i<2 ; i++ )                          { csum += msg->opcode[i];          }
+                                                  { csum += msg->len;                }
+  for( i=0 ; i<msg->nPayload ; i++ )              { csum += msg->payload[i];         }
+  
+  return -csum;
+}
+
+static void msg_set_address( uint8_t *addr, uint8_t class, uint32_t id ) {
+  addr[0] = ( ( class<< 2 ) & 0xFC ) | ( ( id >> 16 ) & 0x03 );
+  addr[1] =                            ( ( id >>  8 ) & 0xFF );
+  addr[2] =                            ( ( id       ) & 0xFF );
+}
+
+static void msg_get_address( uint8_t *addr, uint8_t *class, uint32_t *id ) {
+  uint8_t Class =          ( addr[0] & 0xFC ) >>  2;
+  uint32_t Id =  (uint32_t)( addr[0] & 0x03 ) << 16
+               | (uint32_t)( addr[1]        ) <<  8
+               | (uint32_t)( addr[2]        )       ;
+
+  if( class ) (*class) = Class;
+  if( id    ) (*id   ) = Id;
+}
+
+/********************************************************
 ** Message Print
 ********************************************************/
 static uint8_t msg_print_rssi( char *str, uint8_t rssi, uint8_t valid ) {
@@ -239,12 +273,11 @@ static uint8_t msg_print_addr( char *str, uint8_t *addr, uint8_t valid ) {
   uint8_t n = 0;
 
   if( valid ) {
-    uint8_t  class =         ( addr[0] & 0xFC ) >>  2;
-    uint32_t dev = (uint32_t)( addr[0] & 0x03 ) << 16
-                 | (uint32_t)( addr[1]        ) <<  8
-                 | (uint32_t)( addr[2]        )       ;
-
-    n = sprintf_P(str, PSTR("%02hu:%06lu "), class, dev );
+    uint8_t class;
+    uint32_t id;
+	msg_get_address( addr, &class,&id );
+	
+    n = sprintf_P(str, PSTR("%02hu:%06lu "), class, id );
   } else {
     n = sprintf_P(str, PSTR("--:------ "));
   }
@@ -649,17 +682,12 @@ static uint8_t msg_scan_header( struct message *msg, char *str, uint8_t nChar ) 
 void msg_change_addr( struct message *msg, uint8_t addr, uint8_t Class,uint32_t Id , uint8_t myClass,uint32_t myId ) {
   if( msg && ( msg->fields & ( F_ADDR0 << addr ) ) ) { // Message contains specified address field
     uint8_t *Addr = msg->addr[addr];
-    uint8_t class = ( Addr[0] & 0xFC ) >>  2;
-	if( class==Class ) { // Class matches
-      uint32_t id = (uint32_t)( Addr[0] & 0x03 ) << 16
-                  | (uint32_t)( Addr[1]        ) <<  8
-                  | (uint32_t)( Addr[2]        )       ;
-	  if( id==Id ) { // ID matches
-        Addr[0] = ( myClass<< 2 ) | ( ( myId >> 16 ) & 0x03 );
-        Addr[1] =                   ( ( myId >>  8 ) & 0xFF );
-        Addr[2] =                   ( ( myId       ) & 0xFF );
-	  }
-	}
+	uint8_t class;
+	uint32_t id;
+
+	msg_get_address( Addr, &class, &id );
+	if( class==Class && id==Id ) // address matches
+	  msg_set_address( Addr, myClass, myId ); 
   }
 }
 
@@ -672,15 +700,9 @@ static uint8_t msg_scan_addr( struct message *msg, char *str, uint8_t nChar ) {
     uint32_t id;
 
   	if( nChar<11 && 2==sscanf( str, "%hhu:%lu", &class, &id ) ) {
-
-      msg->addr[addr][0] = ( class<< 2 ) | ( ( id >> 16 ) & 0x03 );
-      msg->addr[addr][1] =                 ( ( id >>  8 ) & 0xFF );
-      msg->addr[addr][2] =                 ( ( id       ) & 0xFF );
-
+	  msg_set_address( msg->addr[addr], class, id );
       msg->fields |= F_ADDR0 << addr;
       ok = 1;
-
-      msg->csum += msg->addr[addr][0] + msg->addr[addr][1] + msg->addr[addr][2];
     } 
   } else {
     ok = 1;
@@ -697,8 +719,6 @@ static uint8_t msg_scan_param( struct message *msg, char *str, uint8_t nChar ) {
   	if( nChar<5 && 1==sscanf( str, "%hhu", msg->param+param ) ) {
       msg->fields |= F_PARAM0 << param;
       ok = 1;
-
-      msg->csum += msg->param[param];
     } 
   } else {
     ok = 1;
@@ -713,8 +733,6 @@ static uint8_t msg_scan_opcode( struct message *msg, char *str, uint8_t nChar ) 
   if( nChar==5 && 2==sscanf( str, "%02hhx%02hhx", msg->opcode+0,msg->opcode+1 )  ) {
     msg->rxFields |= F_OPCODE;
     ok = 1;
-
-    msg->csum += msg->opcode[0] + msg->opcode[1];
   }
 
   return ok;
@@ -728,8 +746,6 @@ static uint8_t msg_scan_len( struct message *msg, char *str, uint8_t nChar ) {
     {
       msg->rxFields |= F_LEN;
       ok = 1;
-
-      msg->csum += msg->len;
     }
   } 
 
@@ -741,7 +757,7 @@ static uint8_t msg_scan_payload( struct message *msg, char *str, uint8_t nChar )
   
   if( nChar==3 && 1==sscanf( str, "%02hhx", msg->payload+msg->nPayload ) )
   {
-    msg->csum += msg->payload[msg->nPayload++];
+    msg->nPayload++;
 	ok = 1;
   }
 
@@ -832,8 +848,6 @@ uint8_t msg_scan( struct message *msg, uint8_t byte ) {
   }
 
   if( msg->state==S_COMPLETE ) {
-    msg->csum += get_header(msg->fields);
-    msg->csum = -msg->csum;
     msg->rxFields |= msg->fields;
     return 1;
   }
@@ -981,11 +995,11 @@ static uint8_t msg_tx_process( struct message *msg, uint8_t *done ) {
   return byte;
 }
 
-
 static struct message *TxMsg;
 static void msg_tx_start( struct message **msg ) {
   if( msg && (*msg) ) {
     TxMsg = (*msg);
+	TxMsg->csum = msg_checksum( TxMsg );
     frame_tx_start( TxMsg->raw, MAX_RAW );
     (*msg) = NULL;
   }
