@@ -183,7 +183,7 @@ static uint8_t cmd_cc_tune(struct cmd *cmd) {
 
       cc_cfg_default( CC1100_FREQ2, 3 );
       cc_cfg_get( CC1100_FREQ2, param, 3 );
-//      cc_param( CC1100_FREQ2, 3, param );
+      cc_param( CC1100_FREQ2, 3, param );
 	  
       cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c Reset F=%02x%02x%02x\r\n"), cmd->buffer[0], param[0],param[1],param[2] );
       validCmd = 1;
