@@ -17,53 +17,8 @@
 
 #include "spi.h"
 #include "config.h"
-#include "cc1101_const.h"
+#include "cc1101_param.h"
 #include "cc1101.h"
-
-// CC1101 register settings
-static const uint8_t PROGMEM CC_REGISTER_VALUES[] = {
-  CC1100_IOCFG2, 0x0D,  // GDO2- RX data
-  CC1100_IOCFG1, 0x2E,  // GDO1- not used
-  CC1100_IOCFG0, 0x2E,  // GDO0- TX data
-
-  CC1100_PKTLEN,   0x00, //
-  CC1100_PKTCTRL1, 0x00, //
-  CC1100_PKTCTRL0, 0x32, // 0x02, //
-
-  CC1100_FSCTRL1, 0x0F,  //
-  CC1100_FREQ2,   0x21,  //
-  CC1100_FREQ1,   0x65,  //
-  CC1100_FREQ0,   0x6C,  //
-
-  CC1100_MDMCFG4, 0x6A,  //
-  CC1100_MDMCFG3, 0x83,  // (DRATE_M=131 data rate=38,383.4838867Hz)
-  CC1100_MDMCFG2, 0x10,  // (GFSK  15/16 Sync Word Carrier sense above threshold)
-  CC1100_MDMCFG1, 0x22,  // (CHANSPC_E=2 NUM_PREAMBLE=4 FEC_EN=0)
-//  CC1100_MDMCFG0, 0xF8,  //
-  CC1100_DEVIATN, 0x50,  //
-
-  CC1100_MCSM2,   0x07,  //
-  CC1100_MCSM1,   0x30,  // CCA_MODE unless currently receiving a packet, RXOFF_MODE to IDLE , TX_OFF_MODE to IDLE
-  CC1100_MCSM0,   0x18,  // (0x18=11000 FS_AUTOCAL=1 When going from IDLE to RX or TX)
-
-  CC1100_FOCCFG,  0x16,  //
-
-  CC1100_AGCCTRL2, 0x43, //
-  CC1100_AGCCTRL1, 0x40, //
-  CC1100_AGCCTRL0, 0x91, //
-
-  CC1100_FSCAL3,  0xE9,  //
-  CC1100_FSCAL2,  0x2A,  //
-  CC1100_FSCAL1,  0x00,  //
-  CC1100_FSCAL0,  0x1F,  //
-
-  CC1100_FSTEST,  0x59,  //
-  CC1100_TEST2,   0x81,  //
-  CC1100_TEST1,   0x35,  //
-  CC1100_TEST0,   0x09,  //
-
-  CC1100_PATABLE, 0xC3   //
-};
 
 static uint8_t cc_read( uint8_t addr ) {
   uint8_t data ;
@@ -136,37 +91,39 @@ uint8_t cc_read_rssi(void) {
   return (uint8_t)( -rssi ); // returns 10 to 138
 }
 
-uint8_t cc_param( uint8_t nParam, uint8_t *param ) {
+uint8_t cc_param( uint8_t reg, uint8_t nReg, uint8_t *param ) {
   uint8_t valid = 0;
-  
-  if( nParam>1 ) {
-  	if( param[0] < 0x30 ) {
-      uint8_t i;
-      uint8_t reg = param[0];
-      uint8_t eimsk = EIMSK;
 
-      cc_enter_idle_mode();
-      for( i=1 ; i<nParam ; i++,reg++ )
-        cc_write( reg, param[i] );
-      cc_enter_rx_mode();
+  if( reg<CC1100_PARAM_MAX && (reg+nReg)<CC1100_PARAM_MAX ) {
+    uint8_t eimsk = EIMSK;
+    valid = 1;
+	
+    cc_enter_idle_mode();
+    while( nReg && reg<CC1100_PARAM_MAX ) {
+      cc_write( reg, (*param) );
+	  reg++; nReg--; param++;
+    }
+    cc_enter_rx_mode();
 
-	  EIMSK = eimsk;
-  	}
+    EIMSK = eimsk;
   }
-
+  
   return valid;
 }
 
-void cc_param_read( uint8_t reg, uint8_t nReg, uint8_t *data ) {
-  if( data ) {
-    while( nReg && reg<0x30 ) {
-      (*data) = cc_read( reg );
-	  reg++;  nReg--; data++;
+void cc_param_read( uint8_t reg, uint8_t nReg, uint8_t *param ) {
+  if( param ) {
+    while( nReg && reg<CC1100_PARAM_MAX ) {
+      (*param) = cc_read( reg );
+	  reg++; nReg--; param++;
     }
   }
 }
 
 void cc_init(void) {
+  uint8_t param[CC1100_PARAM_MAX];
+  uint8_t i,len;
+  
   spi_init();
 
   spi_deassert();
@@ -180,12 +137,14 @@ void cc_init(void) {
 
   spi_strobe(CC1100_SRES);
   //spi_strobe(CC1100_SCAL);
+  
+  len = cc_cfg_get( 0, param, sizeof(param) );
+  for ( i=0 ; i<len ; i++ )
+    cc_write( i, param[i] );
 
-  for (uint8_t i = 0; i < sizeof(CC_REGISTER_VALUES); ) {
-    uint8_t reg = pgm_read_byte(&CC_REGISTER_VALUES[i++]);
-    uint8_t val = pgm_read_byte(&CC_REGISTER_VALUES[i++]);
-    cc_write(reg, val);
-  }
-
+  len = cc_pa_get( param );
+  for ( i=0 ; i<len ; i++ )
+    cc_write( CC1100_PATABLE, param[i]);
+  
   cc_enter_idle_mode();
 }

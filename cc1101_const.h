@@ -60,6 +60,7 @@
 #define CC1100_TEST2     0x2C
 #define CC1100_TEST1     0x2D
 #define CC1100_TEST0     0x2E
+#define CC1100_PARAM_MAX 0x2F
 
 // Strobe commands and registers
 #define CC1100_SRES      0x30
@@ -78,6 +79,8 @@
 #define CC1100_SNOP      0x3D
 #define CC1100_PATABLE   0x3E
 #define CC1100_FIFO      0x3F
+
+#define CC1100_PA_MAX      8
 
 // Burst mode registers
 #define CC1100_PARTNUM        ( CC1100_SRES     | CC_BURST )
