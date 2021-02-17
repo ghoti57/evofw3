@@ -147,7 +147,7 @@ static void msg_create_pool(void) {
 ** Received Message list
 ********************************************************/
 static struct msg_list rx_list;
-static void msg_rx_ready( struct message **msg ) { msg_put( &rx_list, msg, 0 ); }
+void msg_rx_ready( struct message **msg ) { msg_put( &rx_list, msg, 0 ); }
 struct message *msg_rx_get(void) { return msg_get( &rx_list ); }
 
 
@@ -363,6 +363,17 @@ static uint8_t msg_print_raw( char *str, uint8_t raw, uint8_t i ) {
   return n;
 }
 
+static uint8_t msg_print_bytes( char *str, uint8_t raw, uint8_t i ) {
+  uint8_t n = 0;
+
+  if( i )
+    n = sprintf_P( str,PSTR("%c"),raw );
+  else
+    n = sprintf_P( str,PSTR("# %c"),raw );
+
+  return n;
+}
+
 /************************************************************************************
 **
 ** msg_print_field
@@ -454,7 +465,10 @@ static uint8_t msg_print_field( struct message *msg, char *buff ) {
     // Multi buffer field
     if( msg->error || TRACE(TRC_RAW) ){
       if( msg->count < msg->nBytes ) {
-        nBytes = msg_print_raw( buff, msg->raw[msg->count], msg->count );
+        if( msg->rxFields&F_RSSI )
+          nBytes = msg_print_raw( buff, msg->raw[msg->count], msg->count );
+        else
+          nBytes = msg_print_bytes( buff, msg->raw[msg->count], msg->count );
         msg->count++;
       } else if( msg->nBytes ) {
         nBytes = sprintf_P( buff, PSTR("\r\n") );
@@ -779,12 +793,16 @@ uint8_t msg_scan( struct message *msg, uint8_t byte ) {
     // Didn't get a sensible message
     if( msg->state != S_CHECKSUM ) {
       nChar = 0;
-      msg_reset( msg ); // Discard
-      return 0;
+      msg->rxFields |= msg->fields;
+	  msg->error = MSG_BAD_TX;
+      return 1;
     } else {
       byte = '\0';
     }
   }
+
+  if( msg->nBytes<MAX_RAW )
+    msg->raw[msg->nBytes++] = byte;
 
   // Discard to end of line
   if( msg->state == S_ERROR )
@@ -1048,7 +1066,7 @@ uint8_t msg_isValid( struct message *msg ) {
   return isValid;
 }
 
-uint8_t msig_isTx( struct message *msg ) {
+uint8_t msg_isTx( struct message *msg ) {
   uint8_t isTx = 0;
   
   if( msg ) {

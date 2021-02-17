@@ -17,6 +17,7 @@
   _MSG_ERR( MSG_TRUNC_ERR,    "Truncated" ) \
   _MSG_ERR( MSG_WARNING,      "Warning" ) \
   _MSG_ERR( MSG_SUSPECT_WARN, "Suspect payload" ) \
+  _MSG_ERR( MSG_BAD_TX,       "Bad TX message" ) \
 
 #define _MSG_ERR(_e,_t) _e,
 enum msg_err_code { MSG_OK=0, _MSG_ERR_LIST MSG_ERR_MAX };
@@ -45,6 +46,7 @@ extern uint8_t msg_isValid( struct message *msg );
 extern uint8_t msg_isTx( struct message *msg );
 
 // RX messages
+extern void msg_rx_ready( struct message **msg );
 extern struct message *msg_rx_get(void);
 extern uint8_t msg_print( struct message *msg, char *msgBuff );
 extern void msg_change_addr( struct message *msg, uint8_t addr, uint8_t Class,uint32_t Id , uint8_t myClass,uint32_t myId );

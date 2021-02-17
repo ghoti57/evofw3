@@ -7,6 +7,7 @@
 
 #define TRC_RAW    0x01
 #define TRC_ERROR  0x02
+#define TRC_TXERR  0x04
 
 extern uint8_t trace0;
 

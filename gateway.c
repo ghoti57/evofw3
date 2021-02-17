@@ -71,7 +71,7 @@ void gateway_work( void ) {
     // If we get a message now we'll start printing it next time
     rx = msg_rx_get();
 	if( !msg_isValid(rx) ) {
-	  if( !TRACE(TRC_ERROR) )
+	  if( !TRACE(TRC_ERROR) && !TRACE(TRC_TXERR) )
         msg_free(&rx);	// Silently dump error messages
 	}
   }
@@ -93,9 +93,15 @@ void gateway_work( void ) {
 
     if( tx ) { // TX message
       if( msg_scan( tx, byte ) ) {
-        msg_change_addr( tx,0, GWAY_CLASS,GWAY_ID , MyClass,MyId );
-        msg_tx_ready( &tx );
-      }
+		if( msg_isValid( tx ) ) {
+          msg_change_addr( tx,0, GWAY_CLASS,GWAY_ID , MyClass,MyId );
+          msg_tx_ready( &tx );
+        } else if( TRACE(TRC_TXERR) ) {
+          msg_rx_ready( &tx );
+	    } else {
+          msg_free( &tx );
+        }
+	  }
     }
   }
 
