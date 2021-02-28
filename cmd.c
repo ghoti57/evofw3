@@ -10,6 +10,10 @@
 #include <stdio.h>
 
 #include "tty.h"
+#include "cc1101.h"
+#include "cc1101_param.h"
+#include "cc1101_tune.h"
+#include "nv.h"
 
 #include "version.h"
 #include "cmd.h"
@@ -43,12 +47,12 @@ static uint8_t get_hex( uint8_t len, char *param ) {
   return value;
 }
 
-uint8_t trace0 = 0;// TRC_RAW;
+uint8_t trace0 = 0;
 static uint8_t cmd_trace( struct cmd *cmd ) {
-
+  
   if( cmd->n > 1 )
     trace0 = get_hex( cmd->n-1, cmd->buffer+1 );
-
+  
   command.n = sprintf_P( command.buffer, PSTR("# !T=%02x\r\n"),trace0);
 
   return 1;
@@ -87,6 +91,140 @@ static uint8_t cmd_boot(struct cmd *cmd __attribute__((unused))) {
 }
 
 //------------------------------------------------------------------------
+// !C <offset> <data> [<data> ...]
+static uint8_t cmd_cc1101(struct cmd *cmd) {
+  uint8_t validCmd = 0;
+
+  if( cmd->n > 1 ) {
+    switch( cmd->buffer[1] ) {
+    case 'R':
+	case 'r':
+      cc_cfg_default(0,CC1100_PARAM_MAX);
+      cc_pa_default();
+	  
+      cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c Reset\r\n"), cmd->buffer[0]);
+      validCmd = 1;
+	  break;
+
+    case 'S':
+    case 's': {
+	  uint8_t param[CC1100_PARAM_MAX];
+
+      cc_param_read( 0, CC1100_PARAM_MAX, param );
+      cc_cfg_set( 0, param, CC1100_PARAM_MAX );
+	  
+      cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c Saved\r\n"), cmd->buffer[0]);
+      validCmd = 1;
+      break;
+      }
+
+    case ' ': {
+      uint8_t nParam=0;
+      uint8_t param[CC_MAX_PARAM];
+      uint8_t start,end;
+      uint8_t n = cmd->n;
+
+      // Skip command characters
+      end = start = 2;
+
+      while( n > end ) {
+        while( n>start && cmd->buffer[start]==' ' ) start++;	// Skip spaces
+        end = start;
+        while( n>end && cmd->buffer[end]!=' ' ) end++;	// find end of param
+
+        if( end>start )
+          param[nParam++] = get_hex( end-start, cmd->buffer+start );
+
+        start = end;
+        if( nParam == CC_MAX_PARAM )
+          break;
+      }
+
+      if( nParam > 2 ) {
+        cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c"), cmd->buffer[0] );
+        cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" %02x"), param[0] );
+        for( n=1 ; n<nParam ; n++ )
+          cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" %02x"), param[n] );
+        cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("\r\n") );
+
+        if( param[0]<CC1100_PARAM_MAX && param[0]+nParam-2<CC1100_PARAM_MAX ) {
+          cc_param( param[0], nParam-1,param+1 );
+          validCmd = 1;
+        }
+      }
+	  break;
+	  }
+    }
+  }
+
+  return validCmd;
+}
+
+static uint8_t cmd_cc_tune(struct cmd *cmd) {
+  uint8_t validCmd = 0;
+  uint8_t param[CC_MAX_PARAM];
+
+  if( cmd->n > 1 ) {
+    switch( cmd->buffer[1] & ~( 'A'^'a' ) ) {
+    case 'T':
+      cc_tune_enable( 1 );
+
+      cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c Tune\r\n"), cmd->buffer[0] );
+      validCmd = 1;
+      break;
+    case 'A': cc_tune_enable( 0 ); break;
+      cc_tune_enable( 0 );
+
+      cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c Abort\r\n"), cmd->buffer[0] );
+      validCmd = 1;
+      break;
+    case 'R':
+	  cc_tune_enable( 0 );
+
+      cc_cfg_default( CC1100_FREQ2, 3 );
+      cc_cfg_get( CC1100_FREQ2, param, 3 );
+      cc_param( CC1100_FREQ2, 3, param );
+	  
+      cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c Reset F=%02x%02x%02x\r\n"), cmd->buffer[0], param[0],param[1],param[2] );
+      validCmd = 1;
+      break;
+    case 'S':
+      cc_param_read( CC1100_FREQ2, 3, param );
+      cc_cfg_set( CC1100_FREQ2, param, 3 );
+	
+      cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c Saved F=%02x%02x%02x\r\n"), cmd->buffer[0], param[0],param[1],param[2] );
+      validCmd = 1;
+    }
+  } else {
+	cc_param_read( CC1100_FREQ2, 3, param );
+    cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c"), cmd->buffer[0] );
+	cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" F=%02x%02x%02x"), param[0],param[1],param[2] );
+	if( cc_tuneEnabled() )
+      cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR(" tuning"));
+    cmd->n += sprintf_P( cmd->buffer+cmd->n, PSTR("\r\n"));
+	validCmd = 1;
+  }
+  
+  return validCmd;
+}
+
+static uint8_t cmd_eeprom(struct cmd *cmd) {
+  uint8_t validCmd = 0;
+
+  if( cmd->n > 1 ) {
+    switch( cmd->buffer[1] & ~( 'A'^'a' ) ) {
+    case 'R':
+      nv_reset();
+
+      cmd->n = sprintf_P( cmd->buffer, PSTR("# !%c reset\r\n"), cmd->buffer[0] );
+      validCmd = 1;
+    }
+  }
+
+  return validCmd;
+}
+
+//------------------------------------------------------------------------
 
 static uint8_t check_command( struct cmd *cmd ) {
   uint8_t validCmd = 0;
@@ -96,6 +234,9 @@ static uint8_t check_command( struct cmd *cmd ) {
     case 'V':  validCmd = cmd_version( cmd );       break;
     case 'T':  validCmd = cmd_trace( cmd );         break;
     case 'B':  validCmd = cmd_boot( cmd );          break;
+    case 'C':  validCmd = cmd_cc1101( cmd );        break;
+    case 'F':  validCmd = cmd_cc_tune( cmd );       break;
+    case 'E':  validCmd = cmd_eeprom( cmd );        break;
     }
   }
 
@@ -111,7 +252,7 @@ uint8_t cmd( uint8_t byte, char **buffer, uint8_t *n ) {
       if( command.n==0 ) {
         command.inCmd = 0;
       } else {
-       command.inCmd = check_command( &command );
+        command.inCmd = check_command( &command );
         if( command.inCmd ) {
           if( buffer ) (*buffer) = command.buffer;
           if( n ) (*n) = command.n;
@@ -126,4 +267,17 @@ uint8_t cmd( uint8_t byte, char **buffer, uint8_t *n ) {
   }
 
   return command.inCmd;
+}
+
+uint8_t cmd_str( char *str, char **buffer, uint8_t *n ) {
+  uint8_t inCmd=0;
+  uint8_t i;
+  
+  if( str ) {
+    inCmd = 1;
+    for( i=0 ; inCmd && str[i]!='\0' ; i++ )
+      inCmd = cmd( str[i], buffer, n );
+  }
+  
+  return inCmd;
 }
