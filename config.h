@@ -8,26 +8,6 @@
 #elif defined ARDUINO_EVOFW3_ATMEGA328P
 #include "atm328_pins.h"
 
-#elif defined ARDUINO_AVR_PRO
-  #define SWUART
-  #define GDO0 INT0
-  #define GDO2 INT1
-  #define CCSEL 2
-  #include "atm328_pins.h"
-#elif defined ARDUINO_AVR_NANO
-  #define SWUART
-  #define GDO0 INT1
-  #define GDO2 INT0
-  #define CCSEL 2
-  #include "atm328_pins.h"
-#elif defined ARDUINO_AVR_LEONARDO
-  #define HWUART
-  #define CCSEL 6
-  #include "atm32u4_pins.h"
-#else
-  #error "CC1101 connection not defined for target"
-#endif
-
 #include "debug.h"
 
 #define SPI_CLK_RATE    250000
@@ -35,7 +15,11 @@
 #if defined(HOST_RATE)
 #define TTY_BAUD_RATE   HOST_RATE
 #else
-#error No Host baud rate defined - use evofw3_avr board definitions
+#error No Host baud rate defined
+#endif
+
+#else
+#error "CC1101 connection not defined for target - use evofw3_avr board definitions"
 #endif
 
 #endif
