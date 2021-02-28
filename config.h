@@ -8,6 +8,10 @@
 #elif defined ARDUINO_EVOFW3_ATMEGA328P
 #include "atm328_pins.h"
 
+#else
+#error "CC1101 connection not defined for target - use evofw3_avr board definitions"
+#endif
+
 #include "debug.h"
 
 #define SPI_CLK_RATE    250000
@@ -18,8 +22,5 @@
 #error No Host baud rate defined
 #endif
 
-#else
-#error "CC1101 connection not defined for target - use evofw3_avr board definitions"
-#endif
 
 #endif
