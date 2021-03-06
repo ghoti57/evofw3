@@ -448,7 +448,7 @@ static void tx_reset(void) {
   memset( &tx, 0, sizeof(tx) );
 }
 
-ISR(TIMER0_COMPA_vect) {
+ISR(TIMER2_COMPA_vect) {
   uint8_t bit;
   DEBUG_ISR(1);
 
@@ -475,12 +475,12 @@ ISR(TIMER0_COMPA_vect) {
 //---------------------------------------------------------------------------------
 
 static void tx_init(void) {
-  TCCR0A = ( 1<<WGM01 ); // CTC, no output pins
-  TCCR0B = 0 ;
+  TCCR2A = ( 1<<WGM21 ); // CTC, no output pins
+  TCCR2B = 0 ;
 	
-  TCCR0B |= ( 1<<CS01 ); // Pre-scale by 8
+  TCCR2B |= ( 1<<CS21 ); // Pre-scale by 8
 
-  OCR0A = 51;	// 38400 baud	
+  OCR2A = 51;	// 38400 baud	
 }
 
 //---------------------------------------------------------------------------------
@@ -489,8 +489,8 @@ static void tx_start(void) {
   uint8_t sreg = SREG;
   cli();
 
-  TCNT0 = 0;
-  TIMSK0 |= ( 1<<OCIE0A );
+  TCNT2 = 0;
+  TIMSK2 |= ( 1<<OCIE0A );
   GDO0_PORT |=  GDO0_IN ;	// Start in MARK
 
   SREG = sreg;
@@ -499,7 +499,7 @@ static void tx_start(void) {
 //---------------------------------------------------------------------------------
 
 static void tx_stop(void) {
-  TIMSK0 &= ~( 1<<OCIE0A );
+  TIMSK2 &= ~( 1<<OCIE0A );
   tx.state = TX_OFF;
   GDO0_PORT &= ~GDO0_IN ;	// Leave in SPACE
 }
