@@ -6,7 +6,7 @@
 **
 ** Host facing USB
 */
-#include "arduino.h"
+#include "Arduino.h"
 #include "config.h"
 
 #if defined(TTY_USB)
