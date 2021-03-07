@@ -38,9 +38,7 @@
 #else
   #error "GDO0 not mapped"
 #endif
-#endif // SWUART || TX_SYNCH
 
-#if defined(SWUART)
 // GDO2 connection
 #if( GDO2==INT3 )
   #define GDO2_DDR        DDRD
@@ -55,9 +53,7 @@
 #else
   #error "GDO2 not mapped"
 #endif
-#endif // SWUART
 
-#if defined(TX_SYNCH)
 // GDO2 interrupt
 #if( GDO2==INT3 )
   #define GDO2_INT_MASK   ( 1 << INT3 )
@@ -72,7 +68,7 @@
 #else
   #error "GDO2 not mapped"
 #endif
-#endif // TX_SYNCH
+#endif // SWUART || TX_SYNCH
 
 #if defined(SWUART)
 // Software interrupt

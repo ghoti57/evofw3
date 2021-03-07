@@ -13,13 +13,15 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+#if defined(TX_SYNCH)
+#include <string.h>
+#endif
+
 #include "frame.h"
 #include "uart.h"
 
 #include "debug.h"
 #define DEBUG_ISR(_v)      DEBUG1(_v)
-
-#define TX_SYNCH
 
 /***************************************************************************
 ** RX Processing - HW UART
@@ -65,6 +67,33 @@ static void tx_reset(void) {
   memset( &tx, 0, sizeof(tx) );
 }
 
+static void tx_start(void) {
+  GDO0_PORT |=  GDO0_IN ;	    // Start in MARK
+  GDO0_DDR  |=  GDO0_IN;        // Output
+
+  GDO2_DDR  &= ~GDO2_IN;        // Input
+
+  // Rising edge
+  EICRA &= ~GDO2_INT_ISCn0 & ~GDO2_INT_ISCn1;
+  EICRA |=  GDO2_INT_ISCn0 |  GDO2_INT_ISCn1;
+
+  EIFR   = GDO2_INT_MASK ;    // Acknowledge any previous edges
+  EIMSK |= GDO2_INT_MASK ;    // Enable interrupts
+
+  tx_reset();
+}
+
+//---------------------------------------------------------------------------------
+
+static void tx_stop(void) {
+  EIMSK &= ~(1 << GDO2_INT_MASK);  // Disable interrupts
+
+  GDO0_PORT &= ~GDO0_IN ;	    // Leave in SPACE
+  GDO0_DDR  &= ~GDO0_IN;        // Input
+}
+
+//---------------------------------------------------------------------------------
+
 static void tx_bit(void) {
   uint8_t bit;
 
@@ -84,32 +113,11 @@ static void tx_bit(void) {
   	tx.done = frame_tx_byte(&(tx.byte));
   if( !tx.done )
     tx.bitNo = ( tx.bitNo+1 ) % 10;
-  else
+  else {
+  	frame_tx_byte(&(tx.byte));
     tx_stop();
+  }
 }
-
-static void tx_start(void) {
-  GDO0_PORT |=  GDO0_IN ;	                // Start in MARK
-
-  // Rising edge
-  EICRA &= ~GDO2_INT_ISCn0 & ~GDO2_INT_ISCn1;
-  EICRA |=  GDO2_INT_ISCn0 |  GDO2_INT_ISCn1;
-
-  EIFR   = GDO2_INT_MASK ;    // Acknowledge any previous edges
-  EIMSK |= GDO2_INT_MASK ;    // Enable interrupts
-
-  tx_reset();
-}
-
-//---------------------------------------------------------------------------------
-
-static void tx_stop(void) {
-  EIMSK &= ~(1 << GDO2_INT_MASK);  // Disable interrupts
-
-  GDO0_PORT &= ~GDO0_IN ;	      // Leave in SPACE
-}
-
-//---------------------------------------------------------------------------------
 
 ISR(GDO2_INT_VECT) {	// Transmit next bit
   DEBUG_ISR(1);
@@ -149,7 +157,7 @@ DEBUG_ISR(1);
   if( !done ) {
     UDR1 = data;
   } else  {
-    tx_stop(); 
+    UCSR1B &= ~( 1<<UDRE1 );	 // Disable UDR empty interrupt 
   }
 DEBUG_ISR(0);
 }
@@ -214,11 +222,6 @@ void uart_work(void) {
 void uart_init(void) {
   uint8_t sreg = SREG;
   cli();
-
-#if defined(TX_SYNCH)
-  GDO0_DDR  |=  GDO0_IN;        // Output
-  GDO2_DDR  &= ~GDO2_IN;        // Input
-#endif
 
   UCSR1A = ( 1<<TXC1 )    // Clear TX interrupt
          | ( 0<<U2X1 )    // No Double speed

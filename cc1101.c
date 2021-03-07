@@ -66,13 +66,16 @@ void cc_enter_idle_mode(void) {
 void cc_enter_rx_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 
-  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
-  spi_strobe( CC1100_SFRX );
-  while ( CC_STATE( spi_strobe( CC1100_SRX ) ) != CC_STATE_RX );
+  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE ){}
 
 #if defined(TX_SYNCH)
-  cc_write( CC1100_IOCFG2, 0xD );  // Serial Data Output
+	cc_write( CC1100_PKTCTRL0, 0x32 );	  // Asynchronous, infinite packet
+	cc_write( CC1100_IOCFG2, 0xD ); 	  // Serial Data Output
 #endif
+
+  spi_strobe( CC1100_SFRX );
+  while ( CC_STATE( spi_strobe( CC1100_SRX ) ) != CC_STATE_RX ){}
+
 
   EIFR  |= INT_MASK;          // Acknowledge any  previous edges
 }
@@ -80,14 +83,16 @@ void cc_enter_rx_mode(void) {
 void cc_enter_tx_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 
-  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
-  spi_strobe( CC1100_SFSTXON );
-  while ( CC_STATE( spi_strobe( CC1100_STX ) ) != CC_STATE_TX );
-  
-#if defined(TX_SYNCH)
-  cc_write( CC1100_IOCFG2, 0xB );  // Serial Clock
-#endif
+  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE ){}
 
+#if defined(TX_SYNCH)
+	cc_write( CC1100_PKTCTRL0, 0x12 );		// Synchronous, infinite packet
+	cc_write( CC1100_IOCFG2, 0xB ); 		// Serial Clock
+#endif
+  
+  spi_strobe( CC1100_SFSTXON );
+  while ( CC_STATE( spi_strobe( CC1100_STX ) ) != CC_STATE_TX ){}
+  
   EIFR  |= INT_MASK;          // Acknowledge any  previous edges
 }
 
