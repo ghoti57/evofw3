@@ -288,16 +288,12 @@ static void rx_edge_detected(void) {
   rx.lastTime  = rx.time;
 }
 
-ISR(GDO2_INT_VECT) {
-  DEBUG_ISR(1);
-
+static void rx_isr(void) {
   rx.time  = RX_CLOCK;                // Grab a copy of the counter ASAP for accuracy
   rx.level = ( GDO2_PIN & GDO2_IN );  // and the current level
 
   if( rx.level != rx.lastLevel )
 	rx_edge_detected();
-
-  DEBUG_ISR(0);
 }
 
 ISR(TIMER1_OVF_vect) {
@@ -395,12 +391,11 @@ ISR(SW_INT_VECT) {
 //---------------------------------------------------------------------------------
 
 static void rx_start(void) {
-  uint8_t sreg = SREG;
-  cli();
+  rx_reset();
 
   // rising and falling edge
-  EICRA &= ~( 1 << GDO2_INT_ISCn0 ) & ~( 1 << GDO2_INT_ISCn1 ) ;
-  EICRA |=  ( 1 << GDO2_INT_ISCn0 );   
+  EICRA &= ~GDO2_INT_ISCn0 & ~GDO2_INT_ISCn1;
+  EICRA |=  GDO2_INT_ISCn0;   
 
   EIFR   = GDO2_INT_MASK ;    // Acknowledge any previous edges
   EIMSK |= GDO2_INT_MASK ;    // Enable interrupts
@@ -412,7 +407,7 @@ static void rx_start(void) {
   PCIFR  = SW_INT_ENBL;  // Acknowledge any previous event
   PCICR |= SW_INT_ENBL;  // and enable
 
-  SREG = sreg;
+  rx.state = RX_IDLE;
 }
 
 //---------------------------------------------------------------------------------
@@ -427,18 +422,10 @@ static void rx_stop(void) {
 ** TX Processing
 */
 
-enum uart_tx_states {
-  TX_OFF,
-  TX_IDLE,
-};
-
-
 #define MARK  1
 #define SPACE 0
 
 static struct uart_tx_state {
-  uint8_t state;
-
   uint8_t byte;
   uint8_t bitNo;
   uint8_t done;
@@ -448,9 +435,8 @@ static void tx_reset(void) {
   memset( &tx, 0, sizeof(tx) );
 }
 
-ISR(TIMER2_COMPA_vect) {
+static void tx_bit(void) {
   uint8_t bit;
-  DEBUG_ISR(1);
 
   if( tx.bitNo==0 ) { // START bit
 	bit = SPACE;
@@ -468,9 +454,39 @@ ISR(TIMER2_COMPA_vect) {
   	tx.done = frame_tx_byte(&(tx.byte));
   if( !tx.done )
     tx.bitNo = ( tx.bitNo+1 ) % 10;
-
-  DEBUG_ISR(0);
 }
+
+#if defined(TX_SYNCH)
+//---------------------------------------------------------------------------------
+
+static void tx_init(void) {
+}
+
+
+//---------------------------------------------------------------------------------
+
+static void tx_start(void) {
+  tx_reset();
+
+  // Rising edge
+  EICRA &= ~GDO2_INT_ISCn0 & ~GDO2_INT_ISCn1;
+  EICRA |=  GDO2_INT_ISCn0 |  GDO2_INT_ISCn1;
+
+  EIFR   = GDO2_INT_MASK ;    // Acknowledge any previous edges
+  EIMSK |= GDO2_INT_MASK ;    // Enable interrupts
+
+  GDO0_PORT |=  GDO0_IN ;	     // Start in MARK
+}
+
+//---------------------------------------------------------------------------------
+
+static void tx_stop(void) {
+  EIMSK &= ~GDO2_INT_MASK;  // Disable interrupts
+
+  GDO0_PORT &= ~GDO0_IN ;	      // Leave in SPACE
+}
+
+#else  // TX_SYNCH
 
 //---------------------------------------------------------------------------------
 
@@ -483,27 +499,51 @@ static void tx_init(void) {
   OCR2A = 51;	// 38400 baud	
 }
 
+ISR(TIMER2_COMPA_vect) {
+  DEBUG_ISR(1);
+  tx_bit();
+  DEBUG_ISR(0);
+}
+
 //---------------------------------------------------------------------------------
 
 static void tx_start(void) {
-  uint8_t sreg = SREG;
-  cli();
+  tx_reset();
 
   TCNT2 = 0;
   TIMSK2 |= ( 1<<OCIE0A );
-  GDO0_PORT |=  GDO0_IN ;	// Start in MARK
 
-  SREG = sreg;
+  GDO0_PORT |=  GDO0_IN ;	// Start in MARK
 }
 
 //---------------------------------------------------------------------------------
 
 static void tx_stop(void) {
   TIMSK2 &= ~( 1<<OCIE0A );
-  tx.state = TX_OFF;
+
   GDO0_PORT &= ~GDO0_IN ;	// Leave in SPACE
 }
 
+#endif // TX_SYNCH
+
+/***************************************************************************/
+static enum uart_state {
+  UART_IDLE,
+  UART_RX,
+  UART_TX
+} uartState;
+
+ISR(GDO2_INT_VECT) {
+  DEBUG_ISR(1);
+  switch( uartState ) {
+  case UART_RX:   rx_isr(); break;	
+#if defined(TX_SYNCH)
+  case UART_TX:   tx_bit(); break;
+#endif
+  default:                  break;
+  }
+  DEBUG_ISR(0);
+}
 
 /***************************************************************************
 ** External interface
@@ -514,12 +554,10 @@ void uart_rx_enable(void) {
   cli();
 
   tx_stop();
-  rx_reset();
-  rx.state = RX_IDLE;
+  rx_start();
+  uartState = UART_RX;
 
   SREG = sreg;
-
-  rx_start();
 }
 
 void uart_tx_enable(void) {
@@ -527,12 +565,10 @@ void uart_tx_enable(void) {
   cli();
 
   rx_stop();
-  tx_reset();
-  tx.state = TX_IDLE;
+  tx_start();
+  uartState = UART_TX;
 
   SREG = sreg;
-
-  tx_start();
 }
 
 void uart_disable(void) {
@@ -541,6 +577,7 @@ void uart_disable(void) {
 	
   rx_stop();
   tx_stop();
+  uartState = UART_IDLE;
 
   SREG = sreg;
 }
@@ -552,14 +589,14 @@ void uart_init(void) {
   uint8_t sreg = SREG;
   cli();
 
-  GDO0_DDR  |=  GDO0_IN;
-  GDO0_PORT &= ~GDO0_IN;		// Sstart in SPACE
+  GDO0_DDR  |=  GDO0_IN;        // Output
 
-  GDO2_DDR  &= ~GDO2_IN;
+  GDO2_DDR  &= ~GDO2_IN;        // Input
   GDO2_PORT |=  GDO2_IN;		// Set input pull-up
 
   rx_init();
   tx_init();  
+  uartState = UART_IDLE;
 
   SREG = sreg;
 }

@@ -70,6 +70,10 @@ void cc_enter_rx_mode(void) {
   spi_strobe( CC1100_SFRX );
   while ( CC_STATE( spi_strobe( CC1100_SRX ) ) != CC_STATE_RX );
 
+#if defined(TX_SYNCH)
+  cc_write( CC1100_IOCFG2, 0xD );  // Serial Data Output
+#endif
+
   EIFR  |= INT_MASK;          // Acknowledge any  previous edges
 }
 
@@ -79,6 +83,10 @@ void cc_enter_tx_mode(void) {
   while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
   spi_strobe( CC1100_SFSTXON );
   while ( CC_STATE( spi_strobe( CC1100_STX ) ) != CC_STATE_TX );
+  
+#if defined(TX_SYNCH)
+  cc_write( CC1100_IOCFG2, 0xB );  // Serial Clock
+#endif
 
   EIFR  |= INT_MASK;          // Acknowledge any  previous edges
 }

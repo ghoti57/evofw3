@@ -19,19 +19,22 @@
 #include "debug.h"
 #define DEBUG_ISR(_v)      DEBUG1(_v)
 
+#define TX_SYNCH
 
 /***************************************************************************
-** TX Processing
+** RX Processing - HW UART
 */
 
 static void rx_start(void) {
-  UCSR1B |=  ( 1<<RXCIE1 ); // Enable RX complete interrupt
+  UCSR1B |=  ( 1<<RXEN1 )   // Enable Receiver
+           | ( 1<<RXCIE1 ); // Enable RX complete interrupt
 }
 
 //---------------------------------------------------------------------------------
 
 static void rx_stop(void) {
-  UCSR1B &= ~( 1<<RXCIE1 ); // Disable RX complete interrupt
+  UCSR1B &=  ~( 1<<RXCIE1 )  // Disable RX complete interrupt
+           & ~( 1<<RXEN1 );  // Stop receiver
 }
 
 ISR( USART1_RX_vect ) {
@@ -45,19 +48,94 @@ DEBUG_ISR(1);
 DEBUG_ISR(0);
 }
 
+#if defined(TX_SYNCH)
 /***************************************************************************
-** TX Processing
+** TX Processing - CC1101 Synchronous
 */
+#define MARK  1
+#define SPACE 0
+
+static struct tx_data {
+  uint8_t byte;
+  uint8_t bitNo;
+  uint8_t done;
+} tx;
+
+static void tx_reset(void) {
+  memset( &tx, 0, sizeof(tx) );
+}
+
+static void tx_bit(void) {
+  uint8_t bit;
+
+  if( tx.bitNo==0 ) { // START bit
+	bit = SPACE;
+  } else if( tx.bitNo<9 ) { // data bit
+    uint8_t mask = 1 << ( tx.bitNo - 1 );	// Little Endian
+    bit = ( tx.byte & mask ) ? MARK : SPACE;
+  } else { // STOP bit
+    bit = MARK;
+  }
+
+  if( bit ) GDO0_PORT |=  GDO0_IN ;
+  else      GDO0_PORT &= ~GDO0_IN ;
+
+  if( tx.bitNo==0 )
+  	tx.done = frame_tx_byte(&(tx.byte));
+  if( !tx.done )
+    tx.bitNo = ( tx.bitNo+1 ) % 10;
+  else
+    tx_stop();
+}
 
 static void tx_start(void) {
+  GDO0_PORT |=  GDO0_IN ;	                // Start in MARK
 
-  UCSR1B |=	( 1<<UDRE1 );  // Enable UDR empty interrupt
+  // Rising edge
+  EICRA &= ~GDO2_INT_ISCn0 & ~GDO2_INT_ISCn1;
+  EICRA |=  GDO2_INT_ISCn0 |  GDO2_INT_ISCn1;
+
+  EIFR   = GDO2_INT_MASK ;    // Acknowledge any previous edges
+  EIMSK |= GDO2_INT_MASK ;    // Enable interrupts
+
+  tx_reset();
 }
 
 //---------------------------------------------------------------------------------
 
 static void tx_stop(void) {
-  UCSR1B &= ~( 1<<UDRE1 );  // Disable UDR empty interrupt 
+  EIMSK &= ~(1 << GDO2_INT_MASK);  // Disable interrupts
+
+  GDO0_PORT &= ~GDO0_IN ;	      // Leave in SPACE
+}
+
+//---------------------------------------------------------------------------------
+
+ISR(GDO2_INT_VECT) {	// Transmit next bit
+  DEBUG_ISR(1);
+  tx_bit();
+  DEBUG_ISR(0);
+}
+
+#else  // TX_SYNCH
+
+/***************************************************************************
+** TX Processing - HW UART
+*/
+
+static void tx_start(void) {
+  UCSR1B |=  ( 1<<TXEN1 )   // Start Transmitter
+           | ( 1<<TXCIE1 )  // Enable TX complete interrupt
+           | ( 1<<UDRE1 );  // Enable UDR empty interrupt
+  UCSR1A |=  ( 1<<TXC1 );   // Make sure TXC clear
+}
+
+//---------------------------------------------------------------------------------
+
+static void tx_stop(void) {
+  UCSR1B &=  ~( 1<<UDRE1 )   // Disable UDR empty interrupt 
+           & ~( 1<<TXEN1 )   // Disable transmitter
+  	       & ~( 1<<TXCIE1 ); // Disable TX complete interrupt
 }
 
 //---------------------------------------------------------------------------------
@@ -84,6 +162,8 @@ DEBUG_ISR(1);
 DEBUG_ISR(0);
 }
 
+#endif
+
 /***************************************************************************
 ** External interface
 */
@@ -93,11 +173,6 @@ void uart_rx_enable(void) {
   cli();
 
   tx_stop();
-  
-  UCSR1B &= ~( 1<<TXEN1 )   // Disable transmitter
-  	      & ~( 1<<TXCIE1 ); // Disable TX complete interrupt
-  UCSR1B |=  ( 1<<RXEN1 );  // Enable Receiver
-
   rx_start();
 
   SREG = sreg;
@@ -110,12 +185,6 @@ void uart_tx_enable(void) {
   cli();
 
   rx_stop();
-  
-  UCSR1B &= ~( 1<<RXEN1 );  // Stop receiver
-  UCSR1B |=  ( 1<<TXEN1 )   // Start Transmitter
-           | ( 1<<TXCIE1 ); // Enable TX complete interrupt
-  UCSR1A |=  ( 1<<TXC1 );   // Make sure TXC clear
-
   tx_start();
 
   SREG = sreg;
@@ -146,15 +215,20 @@ void uart_init(void) {
   uint8_t sreg = SREG;
   cli();
 
+#if defined(TX_SYNCH)
+  GDO0_DDR  |=  GDO0_IN;        // Output
+  GDO2_DDR  &= ~GDO2_IN;        // Input
+#endif
+
   UCSR1A = ( 1<<TXC1 )    // Clear TX interrupt
-         | ( 0<<U2X1 )    // No Souble speed
+         | ( 0<<U2X1 )    // No Double speed
          | ( 0<<MPCM1 );  // No Multi-processor Command Mode
   	     
   UCSR1B = ( 0<<RXCIE1 )  // Disable RX complete interrupt
          | ( 0<<TXCIE1 )  // Disable TX complete interrupt
          | ( 0<<UDRIE1 )  // disable UDR Empty interrupt
-         | ( 0<<RXEN1 )   // Risable RX 
-         | ( 0<<TXEN1 )   // Risable TX 
+         | ( 0<<RXEN1 )   // Disable RX 
+         | ( 0<<TXEN1 )   // Disable TX 
          | ( 0<<UCSZ12 )  // 8 data bits
          | ( 0<<RXB81 )   // No 9th bit
          | ( 0<<TXB81 );  // No 9th bit
