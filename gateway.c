@@ -69,21 +69,26 @@ void gateway_work( void ) {
     if( !nCmd )
       inCmd = 0;
   } else {
+	uint8_t tuning =  cc_tuneEnabled();
+
     // If we get a message now we'll start printing it next time
     rx = msg_rx_get();
+
+    if( tuning ) {
+      char cmdStr[TXBUF];
+      uint8_t nChar = cc_tune_work( rx, cmdStr );
+      if( nChar ) {
+        inCmd = cmd_str( cmdStr, &cmdBuff, &nCmd );
+      }
+    }
+
 	if( rx ) {
-      if( cc_tuneEnabled() ) {
-	    char cmdStr[TXBUF];
-        uint8_t nChar = cc_tune_work( rx, cmdStr );
-        if( nChar ) {
-          inCmd = cmd_str( cmdStr, &cmdBuff, &nCmd );
-        }
-      } else if( !msg_isValid(rx) ) {
-        if( !TRACE(TRC_ERROR) && !TRACE(TRC_TXERR) )
+      if( !msg_isValid(rx) ) {
+        if( !TRACE(TRC_ERROR) && !TRACE(TRC_TXERR) && !tuning )
           msg_free(&rx);  // Silently dump error messages
       }
 	}
-  }
+  }
 
   // Process serial data from host
   byte = tty_rx_get();
