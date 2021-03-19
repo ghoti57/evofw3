@@ -2,14 +2,12 @@
 #define _CONFIG_H_
 
 #if defined ARDUINO_EVOFW3_ATMEGA32U4
-//#define TX_SYNCH
 #define GDO0 INT3
 #define GDO2 INT2
 #include "atm32u4_pins.h"
 #define HOST_RATE 0
 
 #elif defined ARDUINO_EVOFW3_ATMEGA328P
-#define TX_SYNCH
 #include "atm328_pins.h"
 
 #else
