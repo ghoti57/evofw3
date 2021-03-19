@@ -23,7 +23,6 @@
 #define SPI_MISO    4
 #define SPI_SCLK    5
 
-#if defined(SWUART) || defined(TX_SYNCH)
 // GDO0 connection
 #if( GDO0==INT0 )
   #define GDO0_DDR        DDRD
@@ -38,9 +37,7 @@
 #else
   #error "GDO0 not mapped"
 #endif
-#endif // SWUART || TX_SYNCH
 
-#if defined(SWUART)
 // GDO2 connection
 #if( GDO2==INT1 )
   #define GDO2_DDR        DDRD
@@ -55,10 +52,23 @@
 #else
   #error "GDO2 not mapped"
 #endif
-#endif // SWUART
 
-#if defined(SWUART) || defined(TX_SYNCH)
-  // GDO2 interrupt
+// GDO0 interrupt
+#if( GDO0==INT0 )
+  #define GDO0_INT_MASK   ( 1 << INT0 )
+  #define GDO0_INT_VECT   INT0_vect
+  #define GDO0_INT_ISCn0  ( 1 << ISC00 )
+  #define GDO0_INT_ISCn1  ( 1 << ISC01 )
+#elif( GDO0==INT1 )
+  #define GDO0_INT_MASK   ( 1 << INT1 )
+  #define GDO0_INT_VECT   INT1_vect
+  #define GDO0_INT_ISCn0  ( 1 << ISC10 )
+  #define GDO0_INT_ISCn1  ( 1 << ISC11 )
+#else
+  #error "GDO0 not mapped"
+#endif
+
+// GDO2 interrupt
 #if( GDO2==INT1 )
   #define GDO2_INT_MASK   ( 1 << INT1 )
   #define GDO2_INT_VECT   INT1_vect
@@ -72,7 +82,6 @@
 #else
   #error "GDO2 not mapped"
 #endif
-#endif // SWUART || TX_SYNCH
 
 #if defined(SWUART)
 // Software interrupt
@@ -85,7 +94,7 @@
 #define SW_INT_IN        ( 1<<PORTB0 )
 #endif // SWUART
 
-// SOme debug pins
+// Some debug pins
 #define DEBUG_PORT        PORTC
 #define DEBUG_DDR         DDRC
 #define DEBUG_PIN1        ( 1<<PORTC0 )
