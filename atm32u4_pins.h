@@ -23,22 +23,13 @@
 #define SPI_MISO    3
 #define SPI_SCLK    1
 
-#if defined SWUART
 // GDO0 connection
 #if( GDO0==INT2 )
-  #define GDO0_INT_MASK   ( 1 << INT2 )
-  #define GDO0_INT_VECT   INT2_vect
-  #define GDO0_INT_ISCn0  ISC20
-  #define GDO0_INT_ISCn1  ISC21
   #define GDO0_DDR        DDRD
   #define GDO0_PORT       PORTD
   #define GDO0_PIN        PIND
   #define GDO0_IN         ( 1 << PD2 )
 #elif( GDO0==INT3 )
-  #define GDO0_INT_MASK   ( 1 << INT3 )
-  #define GDO0_INT_VECT   INT3_vect
-  #define GDO0_INT_ISCn0  ISC30
-  #define GDO0_INT_ISCn1  ISC31
   #define GDO0_DDR        DDRD
   #define GDO0_PORT       PORTD
   #define GDO0_PIN        PIND
@@ -49,19 +40,11 @@
 
 // GDO2 connection
 #if( GDO2==INT3 )
-  #define GDO2_INT_MASK   ( 1 << INT3 )
-  #define GDO2_INT_VECT   INT3_vect
-  #define GDO2_INT_ISCn0  ISC30
-  #define GDO2_INT_ISCn1  ISC31
   #define GDO2_DDR        DDRD
   #define GDO2_PORT       PORTD
   #define GDO2_PIN        PIND
   #define GDO2_IN         ( 1 << PD3 )
 #elif( GDO2==INT2 )
-  #define GDO2_INT_MASK   ( 1 << INT2 )
-  #define GDO2_INT_VECT   INT2_vect
-  #define GDO2_INT_ISCn0  ISC20
-  #define GDO2_INT_ISCn1  ISC21
   #define GDO2_DDR        DDRD
   #define GDO2_PORT       PORTD
   #define GDO2_PIN        PIND
@@ -70,6 +53,37 @@
   #error "GDO2 not mapped"
 #endif
 
+// GDO0 interrupt
+#if( GDO0==INT2 )
+  #define GDO0_INT_MASK   ( 1 << INT2 )
+  #define GDO0_INT_VECT   INT2_vect
+  #define GDO0_INT_ISCn0  ( 1 << ISC20 )
+  #define GDO0_INT_ISCn1  ( 1 << ISC21 )
+#elif( GDO0==INT3 )
+  #define GDO0_INT_MASK   ( 1 << INT3 )
+  #define GDO0_INT_VECT   INT3_vect
+  #define GDO0_INT_ISCn0  ( 1 << ISC30 )
+  #define GDO0_INT_ISCn1  ( 1 << ISC31 )
+#else
+  #error "GDO2 not mapped"
+#endif
+
+// GDO2 interrupt
+#if( GDO2==INT3 )
+  #define GDO2_INT_MASK   ( 1 << INT3 )
+  #define GDO2_INT_VECT   INT3_vect
+  #define GDO2_INT_ISCn0  ( 1 << ISC30 )
+  #define GDO2_INT_ISCn1  ( 1 << ISC31 )
+#elif( GDO2==INT2 )
+  #define GDO2_INT_MASK   ( 1 << INT2 )
+  #define GDO2_INT_VECT   INT2_vect
+  #define GDO2_INT_ISCn0  ( 1 << ISC20 )
+  #define GDO2_INT_ISCn1  ( 1 << ISC21 )
+#else
+  #error "GDO2 not mapped"
+#endif
+
+#if defined(SWUART)
 // Software interrupt
 #define SW_INT_ENBL     ( 1<<PCIE0 )
 #define SW_INT_VECT      PCINT0_vect

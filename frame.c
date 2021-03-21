@@ -267,7 +267,7 @@ static uint8_t tx_prefix[] = {
 
 static uint8_t tx_suffix[] = {
   0x35,                           // Trailer
-  0x55, 0x55, 0x55,               // Training
+  0x55,                           // Training
 };
 
 void frame_tx_start( uint8_t *raw, uint8_t nRaw ) {
@@ -349,19 +349,21 @@ static void frame_tx_done(void) {
 static void frame_rx_enable(void) {
   uart_disable();
   cc_enter_rx_mode();
-  uart_rx_enable();
 
   frame.state = FRM_RX;
   rxFrm.state = FRM_RX_IDLE;
+
+  uart_rx_enable();
 }
 
 static void frame_tx_enable(void) {
   uart_disable();
   cc_enter_tx_mode();
-  uart_tx_enable();
 
   frame.state = FRM_TX;
   txFrm.state = FRM_TX_IDLE;
+
+  uart_tx_enable();
 }
 
 void frame_disable(void) {

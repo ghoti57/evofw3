@@ -1,24 +1,34 @@
 /***************************************************************
-** sw_uart.c
+** uart.c
 **
-** emulate a UART
-**  RX: capturing edges and analyse to acquire byte
-**  TX: generate edges
+** UART interface to radio
+**
+** SWUART RX
+** HWUART RX
+** Common TX using cc1101 FIFO
 */
 
 #include "config.h"
-#if defined(SWUART)
 
-#include <string.h>
-#include <util/delay.h>
-
+#include <avr/io.h>
 #include <avr/interrupt.h>
 
+#include <string.h>
+
+#include "cc1101.h"
 #include "frame.h"
 #include "uart.h"
 
+#include "debug.h"
 #define DEBUG_ISR(_v)      DEBUG1(_v)
 #define DEBUG_EDGE(_v)     DEBUG2(_v)
+
+#if defined(SWUART)
+/***************************************************************************
+****************************************************************************
+** RX Processing - HW UART
+****************************************************************************
+****************************************************************************/
 
 /***************************************************************
 ** BIT constants
@@ -288,16 +298,12 @@ static void rx_edge_detected(void) {
   rx.lastTime  = rx.time;
 }
 
-ISR(GDO2_INT_VECT) {
-  DEBUG_ISR(1);
-
+static void rx_isr(void) {
   rx.time  = RX_CLOCK;                // Grab a copy of the counter ASAP for accuracy
   rx.level = ( GDO2_PIN & GDO2_IN );  // and the current level
 
   if( rx.level != rx.lastLevel )
 	rx_edge_detected();
-
-  DEBUG_ISR(0);
 }
 
 ISR(TIMER1_OVF_vect) {
@@ -395,12 +401,11 @@ ISR(SW_INT_VECT) {
 //---------------------------------------------------------------------------------
 
 static void rx_start(void) {
-  uint8_t sreg = SREG;
-  cli();
+  rx_reset();
 
   // rising and falling edge
-  EICRA &= ~( 1 << GDO2_INT_ISCn0 ) & ~( 1 << GDO2_INT_ISCn1 ) ;
-  EICRA |=  ( 1 << GDO2_INT_ISCn0 );   
+  EICRA &= ~GDO2_INT_ISCn0 & ~GDO2_INT_ISCn1;
+  EICRA |=  GDO2_INT_ISCn0;   
 
   EIFR   = GDO2_INT_MASK ;    // Acknowledge any previous edges
   EIMSK |= GDO2_INT_MASK ;    // Enable interrupts
@@ -412,7 +417,7 @@ static void rx_start(void) {
   PCIFR  = SW_INT_ENBL;  // Acknowledge any previous event
   PCICR |= SW_INT_ENBL;  // and enable
 
-  SREG = sreg;
+  rx.state = RX_IDLE;
 }
 
 //---------------------------------------------------------------------------------
@@ -422,104 +427,276 @@ static void rx_stop(void) {
   rx.state = RX_OFF;
 }
 
+/***************************************************************************/
 
-/***************************************************************************
-** TX Processing
-*/
-
-enum uart_tx_states {
-  TX_OFF,
-  TX_IDLE,
-};
-
-
-#define MARK  1
-#define SPACE 0
-
-static struct uart_tx_state {
-  uint8_t state;
-
-  uint8_t byte;
-  uint8_t bitNo;
-  uint8_t done;
-} tx;
-
-static void tx_reset(void) {
-  memset( &tx, 0, sizeof(tx) );
-}
-
-ISR(TIMER2_COMPA_vect) {
-  uint8_t bit;
+ISR(GDO2_INT_VECT) {
   DEBUG_ISR(1);
-
-  if( tx.bitNo==0 ) { // START bit
-	bit = SPACE;
-  } else if( tx.bitNo<9 ) { // data bit
-    uint8_t mask = 1 << ( tx.bitNo - 1 );	// Little Endian
-    bit = ( tx.byte & mask ) ? MARK : SPACE;
-  } else { // STOP bit
-    bit = MARK;
-  }
-
-  if( bit ) GDO0_PORT |=  GDO0_IN ;
-  else      GDO0_PORT &= ~GDO0_IN ;
-
-  if( tx.bitNo==0 )
-  	tx.done = frame_tx_byte(&(tx.byte));
-  if( !tx.done )
-    tx.bitNo = ( tx.bitNo+1 ) % 10;
-
+  rx_isr();	
   DEBUG_ISR(0);
 }
 
-//---------------------------------------------------------------------------------
+#endif // SWUART RX
 
-static void tx_init(void) {
-  TCCR2A = ( 1<<WGM21 ); // CTC, no output pins
-  TCCR2B = 0 ;
-	
-  TCCR2B |= ( 1<<CS21 ); // Pre-scale by 8
 
-  OCR2A = 51;	// 38400 baud	
-}
+#if defined(HWUART)
+/***************************************************************************
+****************************************************************************
+** RX Processing - HW UART
+****************************************************************************
+****************************************************************************/
+#define UBRR(_f,_b) ( ( ( ( (_f)/16 ) + ((_b)/2) )/( _b ) ) - 1 )
 
-//---------------------------------------------------------------------------------
-
-static void tx_start(void) {
+void rx_init(void) {
   uint8_t sreg = SREG;
   cli();
 
-  TCNT2 = 0;
-  TIMSK2 |= ( 1<<OCIE0A );
-  GDO0_PORT |=  GDO0_IN ;	// Start in MARK
+  UCSR1A = ( 1<<TXC1 )    // Clear TX interrupt
+         | ( 0<<U2X1 )    // No Double speed
+         | ( 0<<MPCM1 );  // No Multi-processor Command Mode
+  	     
+  UCSR1B = ( 0<<RXCIE1 )  // Disable RX complete interrupt
+         | ( 0<<TXCIE1 )  // Disable TX complete interrupt
+         | ( 0<<UDRIE1 )  // disable UDR Empty interrupt
+         | ( 0<<RXEN1 )   // Disable RX 
+         | ( 0<<TXEN1 )   // Disable TX 
+         | ( 0<<UCSZ12 )  // 8 data bits
+         | ( 0<<RXB81 )   // No 9th bit
+         | ( 0<<TXB81 );  // No 9th bit
+  UCSR1C = ( 0<<UMSEL11 ) | ( 0<<UMSEL10 )  // Asynchronous USART
+         | ( 0<<UPM11   ) | ( 0<<UPM10   )  // Parity disabled
+         | ( 0<<USBS1   )                   // 1 stop bit
+         | ( 1<<UCSZ11  ) | ( 1<<UCSZ10  )  // 8 data bits
+         | ( 0<<UCPOL1  ); 	                // No synchronous clock
+  UCSR1D = ( 0<<CTSEN )     // Disable CTS
+         | ( 0<<RTSEN );    // Disable RTS
 
+  UBRR1H = UBRR(F_CPU,RADIO_BAUDRATE) >> 8;
+  UBRR1L = UBRR(F_CPU,RADIO_BAUDRATE);
+  
   SREG = sreg;
 }
 
 //---------------------------------------------------------------------------------
 
-static void tx_stop(void) {
-  TIMSK2 &= ~( 1<<OCIE0A );
-  tx.state = TX_OFF;
-  GDO0_PORT &= ~GDO0_IN ;	// Leave in SPACE
+static void rx_start(void) {
+  UCSR1B |=  ( 1<<RXEN1 )   // Enable Receiver
+           | ( 1<<RXCIE1 ); // Enable RX complete interrupt
 }
+
+//---------------------------------------------------------------------------------
+
+static void rx_stop(void) {
+  UCSR1B &=  ~( 1<<RXCIE1 )  // Disable RX complete interrupt
+           & ~( 1<<RXEN1 );  // Stop receiver
+}
+
+//---------------------------------------------------------------------------------
+
+ISR( USART1_RX_vect ) {
+  volatile uint8_t status __attribute__((unused));
+  uint8_t data;
+
+DEBUG_ISR(1);
+  status = UCSR1A;
+  data = UDR1;
+  frame_rx_byte(data);
+DEBUG_ISR(0);
+}
+
+#endif // HWUART RX
 
 
 /***************************************************************************
-** External interface
+****************************************************************************
+** TX Processing - Common - cc1101 FIFO
+****************************************************************************
+****************************************************************************/
+
+/*****************************************************************
+* NOTE: The following shift_register structure is sensitive to
+*       the endianness used by the MCU.  It may be necessary to
+*       swap the order of .bits and .data
+*
+* The desired behaviour is that when .reg is left shifted the
+* msb of .bits becomes the lsb of .data
 */
+static union shift_register {
+  uint16_t reg;
+  struct {
+#if __BYTE_ORDER__ ==__ORDER_LITTLE_ENDIAN__
+    uint8_t bits;
+    uint8_t data;
+#endif
+#if __BYTE_ORDER__ ==__ORDER_BIG_ENDIAN__
+    uint8_t data;
+    uint8_t bits;
+#endif
+  };
+} tx;
+static uint8_t txBits;   // Number of valid bits in shift register
+
+static uint8_t swap4( uint8_t in ) {
+  static uint8_t out[16] = {
+    0x0, 0x8, 0x4, 0xC, 0x2, 0xA, 0x6, 0xE,
+	0x1, 0x9, 0x5, 0xD, 0x3, 0xB, 0x7, 0xF
+  };
+  
+  return out[ in & 0xF ];
+}
+
+static uint8_t swap8( uint8_t in ) {
+  uint8_t out;
+  
+  out  = swap4( in ) << 4;
+  out |= swap4( in>>4 );
+
+  return out;
+}
+
+static uint8_t tx_data(void) {
+   return cc_write_fifo( tx.data );
+}
+
+static inline void insert_p(void)  { tx.data <<= 1 ; tx.data |= 0x01; }
+static inline void insert_s(void)  { tx.data <<= 1 ; }
+static inline void insert_ps(void) { insert_p(); insert_s(); }
+static inline void send( uint8_t n ) { tx.reg <<= n ; }
+
+static uint8_t tx_byte( uint8_t byte ) { // convert byte to octets
+  uint8_t space = 15;
+
+  tx.bits = swap8(byte);
+
+  // For each 4 bytes of data we send 5 octets of bitstream
+  // so there is one case which generates two octets
+  switch( txBits )
+  {
+  case 0: insert_ps(); send(6); space = tx_data(); send(2); txBits=2; break;
+  case 2: insert_ps(); send(4); space = tx_data(); send(4); txBits=4; break;
+  case 4: insert_ps(); send(2); space = tx_data(); send(6); // Fall through
+  case 6: insert_ps();          space = tx_data();          txBits=8; break;
+  case 8:              send(8); space = tx_data();          txBits=0; break;
+  }
+
+  return space;
+}
+
+static void tx_flush( void ) { 
+  // flush outstanding bits
+  if( txBits ) {
+    send(8-txBits);
+    tx_data();  
+  }
+
+  // Leave in SPACE condition
+  tx.data = 0xFF;  
+  tx_data();
+}
+
+//-----------------------------------------------------------------
+
+enum tx_fifo_state {
+  TX_FIFO_FILL,
+  TX_FIFO_WAIT
+} tx_state;
+
+static void tx_stop(void) {
+  EIMSK &= ~(1 << GDO0_INT_MASK);  // Disable interrupts
+}
+
+static void tx_fifo_wait(void) {
+  uint8_t data;
+  tx_stop();
+  frame_tx_byte( &data );
+}
+
+static uint8_t tx_fifo_send_block(void) {
+  uint8_t done;
+
+  uint8_t count;
+  uint8_t block = 4;
+  
+  do {
+    uint8_t data;
+    done = frame_tx_byte( &data );
+    count = tx_byte( data );
+    block--;
+  } while( block && !done && count>4 );
+
+  return done;
+}
+
+static void tx_prime( void ) { 
+  // Not clear why but have to send a zero byte to start TX correctly
+  cc_write_fifo( 0x00 );
+  
+  // Now send a BREAK condition
+  cc_write_fifo( 0xFF );
+  cc_write_fifo( 0x00 );
+  cc_write_fifo( 0x00 );
+
+  // So we can see an interrupt when it falls below threshold
+  // send sufficient data to fill FIFO above threshold
+  txBits = 0;
+  while( !( GDO0_PIN & GDO0_IN ) )
+    tx_fifo_send_block();
+}
+
+static void tx_fifo_fill(void) {
+  uint8_t done = tx_fifo_send_block();
+  
+  if( done ) {
+    tx_flush(); 
+    cc_fifo_end();
+    tx_state = TX_FIFO_WAIT;
+	 
+    // Switch to rising edge
+    EIFR   = GDO0_INT_MASK ;    // Acknowledge any previous edges
+    EICRA &= ~GDO0_INT_ISCn0 & ~GDO0_INT_ISCn1;
+    EICRA |=  GDO0_INT_ISCn0 |  GDO0_INT_ISCn1;
+  }
+}
+
+static void tx_init(void) {
+}
+
+static void tx_start(void) {
+  // Falling edge
+  EICRA &= ~GDO0_INT_ISCn0 & ~GDO0_INT_ISCn1;
+  EICRA |=                    GDO0_INT_ISCn1;
+
+  tx_prime();
+  tx_state = TX_FIFO_FILL;
+
+  EIFR   = GDO0_INT_MASK ;    // Acknowledge any previous edges
+  EIMSK |= GDO0_INT_MASK ;    // Enable interrupts
+}
+
+//---------------------------------------------------------------------------------
+
+ISR( GDO0_INT_VECT ) { // Fifo interrupts
+DEBUG_ISR(1);
+  switch(tx_state) {
+    case TX_FIFO_FILL:  tx_fifo_fill();  break;
+	case TX_FIFO_WAIT:  tx_fifo_wait();  break;
+  }
+DEBUG_ISR(0);
+}
+
+/***************************************************************************
+****************************************************************************
+** External interface
+****************************************************************************
+****************************************************************************/
 
 void uart_rx_enable(void) {
   uint8_t sreg = SREG;
   cli();
 
   tx_stop();
-  rx_reset();
-  rx.state = RX_IDLE;
+  rx_start();
 
   SREG = sreg;
-
-  rx_start();
 }
 
 void uart_tx_enable(void) {
@@ -527,12 +704,9 @@ void uart_tx_enable(void) {
   cli();
 
   rx_stop();
-  tx_reset();
-  tx.state = TX_IDLE;
+  tx_start();
 
   SREG = sreg;
-
-  tx_start();
 }
 
 void uart_disable(void) {
@@ -552,10 +726,9 @@ void uart_init(void) {
   uint8_t sreg = SREG;
   cli();
 
-  GDO0_DDR  |=  GDO0_IN;
-  GDO0_PORT &= ~GDO0_IN;		// Sstart in SPACE
-
-  GDO2_DDR  &= ~GDO2_IN;
+  GDO0_DDR  &= ~GDO0_IN;        // Input (for TX Fifo interrupts)
+  
+  GDO2_DDR  &= ~GDO2_IN;        // Input (for RX Data)
   GDO2_PORT |=  GDO2_IN;		// Set input pull-up
 
   rx_init();
@@ -563,5 +736,3 @@ void uart_init(void) {
 
   SREG = sreg;
 }
-
-#endif // SWUART

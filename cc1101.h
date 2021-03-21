@@ -22,6 +22,9 @@ extern void cc_enter_idle_mode(void);
 extern void cc_enter_rx_mode(void);
 extern void cc_enter_tx_mode(void);
 
+extern uint8_t cc_write_fifo(uint8_t b);
+extern void cc_fifo_end(void);
+
 extern void cc_init(void);
 extern void cc_work(void);
 

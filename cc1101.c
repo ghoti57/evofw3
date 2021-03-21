@@ -49,11 +49,12 @@ static uint8_t cc_write(uint8_t addr, uint8_t b) {
   return result;
 }
 
-#if defined GDO2_INT_MASK
-#define INT_MASK GDO2_INT_MASK
-#else
-#define INT_MASK 0
-#endif
+uint8_t cc_write_fifo(uint8_t b) {
+  uint8_t result = cc_write( CC1100_FIFO, b );
+  return result & 0x0F;	// TX fifo space
+}
+
+#define INT_MASK ( GDO0_INT_MASK | GDO2_INT_MASK  )
 
 void cc_enter_idle_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
@@ -66,9 +67,13 @@ void cc_enter_idle_mode(void) {
 void cc_enter_rx_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 
-  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
+  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE ){}
+
+  cc_write( CC1100_IOCFG0, 0x2E );      // GDO0 not needed
+  cc_write( CC1100_PKTCTRL0, 0x32 );	// Asynchronous, infinite packet
+
   spi_strobe( CC1100_SFRX );
-  while ( CC_STATE( spi_strobe( CC1100_SRX ) ) != CC_STATE_RX );
+  while ( CC_STATE( spi_strobe( CC1100_SRX ) ) != CC_STATE_RX ){}
 
   EIFR  |= INT_MASK;          // Acknowledge any  previous edges
 }
@@ -76,11 +81,19 @@ void cc_enter_rx_mode(void) {
 void cc_enter_tx_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 
-  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
-  spi_strobe( CC1100_SFSTXON );
-  while ( CC_STATE( spi_strobe( CC1100_STX ) ) != CC_STATE_TX );
+  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE ){}
+
+  cc_write( CC1100_PKTCTRL0, 0x02 );    // Fifo mode, infinite packet
+  cc_write( CC1100_IOCFG0, 0x02 );      // Falling edge, TX Fifo low
+
+  spi_strobe( CC1100_SFTX );
+  while ( CC_STATE( spi_strobe( CC1100_STX ) ) != CC_STATE_TX ){}
 
   EIFR  |= INT_MASK;          // Acknowledge any  previous edges
+}
+
+void cc_fifo_end(void) {
+  cc_write( CC1100_IOCFG0, 0x05 ); 		// Rising edge, TX Fifo empty
 }
 
 uint8_t cc_read_rssi(void) {
@@ -145,6 +158,8 @@ void cc_init(void) {
   len = cc_pa_get( param );
   for ( i=0 ; i<len ; i++ )
     cc_write( CC1100_PATABLE, param[i]);
-  
+
+  cc_write( CC1100_FIFOTHR, (param[CC1100_FIFOTHR]&0xF0)+14 );	  // TX Fifo Threshold 5
+
   cc_enter_idle_mode();
 }
