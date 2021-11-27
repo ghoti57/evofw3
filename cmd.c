@@ -5,6 +5,7 @@
 **
 ********************************************************/
 #include <avr/pgmspace.h>
+#include <avr/boot.h>
 
 #include <string.h>
 #include <stdio.h>
@@ -65,6 +66,21 @@ static uint8_t cmd_version( struct cmd *cmd __attribute__((unused))) {
   command.n = sprintf_P( command.buffer, PSTR("# %s %d.%d.%d\r\n"),BRANCH,MAJOR,MINOR,SUBVER);
   return 1;
 }
+
+//------------------------------------------------------------------------
+
+static uint8_t cmd_deviceId( struct cmd *cmd __attribute__((unused))) {
+  // There are no parameters
+  static uint8_t  MyClass = 18;
+  static uint32_t MyId;
+
+  MyId = (((uint32_t)boot_signature_byte_get(0x15) << 16) + ((uint32_t)boot_signature_byte_get(0x16) << 8) + ((uint32_t)boot_signature_byte_get(0x17)));
+  MyId &= 0x03FFFF;
+
+  command.n = sprintf_P( command.buffer, PSTR("# deviceID %02hu:%06lu\r\n"),MyClass, MyId);
+  return 1;
+}
+
 
 //------------------------------------------------------------------------
 #if defined(DFU)
@@ -237,6 +253,7 @@ static uint8_t check_command( struct cmd *cmd ) {
     case 'C':  validCmd = cmd_cc1101( cmd );        break;
     case 'F':  validCmd = cmd_cc_tune( cmd );       break;
     case 'E':  validCmd = cmd_eeprom( cmd );        break;
+    case 'I':  validCmd = cmd_deviceId( cmd );      break;
     }
   }
 
