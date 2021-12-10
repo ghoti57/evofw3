@@ -14,6 +14,7 @@
 #include "cc1101_param.h"
 #include "cc1101_tune.h"
 #include "nv.h"
+#include "device.h"
 
 #include "version.h"
 #include "cmd.h"
@@ -63,6 +64,18 @@ static uint8_t cmd_trace( struct cmd *cmd ) {
 static uint8_t cmd_version( struct cmd *cmd __attribute__((unused))) {
   // There are no parameters
   command.n = sprintf_P( command.buffer, PSTR("# %s %d.%d.%d\r\n"),BRANCH,MAJOR,MINOR,SUBVER);
+  return 1;
+}
+
+//------------------------------------------------------------------------
+
+static uint8_t cmd_id( struct cmd *cmd __attribute__((unused))) {
+  uint8_t  class;
+  uint32_t id;
+  device_get_id( &class, &id );
+
+  // There are no parameters
+  command.n = sprintf_P( command.buffer, PSTR("# %02hu:%06lu\r\n"),class,id);
   return 1;
 }
 
@@ -237,6 +250,7 @@ static uint8_t check_command( struct cmd *cmd ) {
     case 'C':  validCmd = cmd_cc1101( cmd );        break;
     case 'F':  validCmd = cmd_cc_tune( cmd );       break;
     case 'E':  validCmd = cmd_eeprom( cmd );        break;
+    case 'I':  validCmd = cmd_id( cmd );            break;
     }
   }
 
