@@ -2,7 +2,6 @@
 
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
-#include <avr/boot.h>
 #include <avr/power.h>
 
 #include "config.h"
@@ -13,8 +12,6 @@
 #include "gateway.h"
 
 void main_init(void) {
-  uint32_t myId;
-
   // OSCCAL=((uint32_t)OSCCAL * 10368) / 10000;
 
 #if defined(DEBUG_PORT)
@@ -24,16 +21,12 @@ void main_init(void) {
 
   wdt_disable();
   clock_prescale_set(clock_div_1);
-  
+
   led_init();
   tty_init();
   spi_init();
 
-  myId =(  ( (uint32_t)boot_signature_byte_get(0x15) << 16 )
-  	     + ( (uint32_t)boot_signature_byte_get(0x16) <<  8 )
-         + ( (uint32_t)boot_signature_byte_get(0x17) <<  0 )
-        );
-  gateway_init( myId );
+  gateway_init();
 
   sei();
 }

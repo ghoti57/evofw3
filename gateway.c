@@ -16,6 +16,7 @@
 #include "message.h"
 
 #include "cc1101_tune.h"
+#include "device.h"
 #include "gateway.h"
 
 #define GWAY_CLASS 18
@@ -28,8 +29,9 @@ static uint8_t inCmd;
 static char *cmdBuff;
 static uint8_t nCmd;
 
-void gateway_init( uint32_t myID ) {
-  MyId = myID;
+void gateway_init( void ) {
+  device_init( GWAY_CLASS );
+  device_get_id( &MyClass, &MyId );
 
   cc_init();
   frame_init();
