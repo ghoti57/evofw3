@@ -259,15 +259,16 @@ static void frame_tx_reset(void) {
   memset( &txFrm, 0, sizeof(txFrm) );
 }
 
+#define TRAIN 0x55
 static uint8_t tx_prefix[] = {
-  0x55, 0x55, 0x55, 0x55, 0x55,   // Pre-amble
-  0xFF, 0x00,                     // Sync Word
-  0x33, 0x55, 0x53                // Header
+  TRAIN, TRAIN, TRAIN, TRAIN, TRAIN,   // Pre-amble
+  0xFF, 0x00,                          // Sync Word
+  0x33, 0x55, 0x53                     // Header
 };
 
 static uint8_t tx_suffix[] = {
   0x35,                           // Trailer
-  0x55,                           // Training
+  TRAIN,                          // Training
 };
 
 void frame_tx_start( uint8_t *raw, uint8_t nRaw ) {
@@ -275,17 +276,17 @@ void frame_tx_start( uint8_t *raw, uint8_t nRaw ) {
 
   // Encode raw frame
   for( i=0 ; i<nRaw+1 ; i+=2 ) {
-  	byte = msg_tx_byte(&done);
-	if( done ) break;
-	
-	raw[ i   ] = manchester_encode( byte >> 4 );
-	raw[ i+1 ] = manchester_encode( byte      );
+    byte = msg_tx_byte(&done);
+    if( done ) break;
+
+    raw[ i   ] = manchester_encode( byte >> 4 );
+    raw[ i+1 ] = manchester_encode( byte      );
   }
 
   txFrm.nBytes = i;
   txFrm.raw = raw;
   txFrm.nRaw = nRaw;
-	
+
   txFrm.state = FRM_TX_READY;
 }
 
@@ -294,30 +295,29 @@ uint8_t frame_tx_byte(uint8_t *byte) {
 
   switch( txFrm.state ) {
   case FRM_TX_IDLE:
-    txFrm.state = FRM_TX_PREFIX;
-    // Fall through
 
+    // Fall through
+    txFrm.state = FRM_TX_PREFIX;
   case FRM_TX_PREFIX:
     if( txFrm.count < sizeof(tx_prefix) ) {
       (*byte) = tx_prefix[txFrm.count++];
       break;
     }
+
+    // Fall through
     txFrm.count = 0;
     txFrm.state = FRM_TX_MESSAGE;
-    // Fall through
-
   case FRM_TX_MESSAGE:
     if( txFrm.count < txFrm.nBytes ) {
       (*byte) = txFrm.raw[ txFrm.count++ ];
-	  break;
+      break;
     } 
 
     msg_tx_end( txFrm.nBytes );
 
+    // Fall through
     txFrm.count = 0;
     txFrm.state = FRM_TX_SUFFIX;
-    // Fall through
-
   case FRM_TX_SUFFIX:
     if( txFrm.count < sizeof(tx_suffix) ) {
       (*byte) = tx_suffix[txFrm.count++];
@@ -325,12 +325,13 @@ uint8_t frame_tx_byte(uint8_t *byte) {
         done = 1;
       break;
     }
+
+    // Fall through
     txFrm.count = 0;
     txFrm.state = FRM_TX_DONE;
-    // Fall through
-
   case FRM_TX_DONE:
-  	done = 1;
+    done = 1;
+    (*byte) = TRAIN;
     break;
   }
 
