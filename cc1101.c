@@ -23,14 +23,14 @@
 static uint8_t cc_read( uint8_t addr ) {
   uint8_t data ;
 
-  spi_assert();
+  spi_assert(CCSEL);
 
   while( spi_check_miso() );
 
   spi_send( addr | CC_READ );
   data = spi_send( 0 );
 
-  spi_deassert();
+  spi_deassert(CCSEL);
 
   return data;
 }
@@ -38,14 +38,14 @@ static uint8_t cc_read( uint8_t addr ) {
 static uint8_t cc_write(uint8_t addr, uint8_t b) {
   uint8_t result;
 
-  spi_assert();
+  spi_assert(CCSEL);
 
   while( spi_check_miso() );
 
   spi_send(addr);
   result = spi_send(b);
 
-  spi_deassert();
+  spi_deassert(CCSEL);
   return result;
 }
 
@@ -59,7 +59,7 @@ uint8_t cc_write_fifo(uint8_t b) {
 void cc_enter_idle_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 
-  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE );
+  while ( CC_STATE( spi_strobe( CCSEL, CC1100_SIDLE ) ) != CC_STATE_IDLE );
 
   EIFR  |= INT_MASK;          // Acknowledge any  previous edges
 }
@@ -67,13 +67,13 @@ void cc_enter_idle_mode(void) {
 void cc_enter_rx_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 
-  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE ){}
+  while ( CC_STATE( spi_strobe( CCSEL, CC1100_SIDLE ) ) != CC_STATE_IDLE ){}
 
   cc_write( CC1100_IOCFG0, 0x2E );      // GDO0 not needed
   cc_write( CC1100_PKTCTRL0, 0x32 );	// Asynchronous, infinite packet
 
-  spi_strobe( CC1100_SFRX );
-  while ( CC_STATE( spi_strobe( CC1100_SRX ) ) != CC_STATE_RX ){}
+  spi_strobe( CCSEL, CC1100_SFRX );
+  while ( CC_STATE( spi_strobe( CCSEL, CC1100_SRX ) ) != CC_STATE_RX ){}
 
   EIFR  |= INT_MASK;          // Acknowledge any  previous edges
 }
@@ -81,13 +81,13 @@ void cc_enter_rx_mode(void) {
 void cc_enter_tx_mode(void) {
   EIMSK &= ~INT_MASK;            // Disable interrupts
 
-  while ( CC_STATE( spi_strobe( CC1100_SIDLE ) ) != CC_STATE_IDLE ){}
+  while ( CC_STATE( spi_strobe( CCSEL, CC1100_SIDLE ) ) != CC_STATE_IDLE ){}
 
   cc_write( CC1100_PKTCTRL0, 0x02 );    // Fifo mode, infinite packet
   cc_write( CC1100_IOCFG0, 0x02 );      // Falling edge, TX Fifo low
 
-  spi_strobe( CC1100_SFTX );
-  while ( CC_STATE( spi_strobe( CC1100_STX ) ) != CC_STATE_TX ){}
+  spi_strobe( CCSEL, CC1100_SFTX );
+  while ( CC_STATE( spi_strobe( CCSEL, CC1100_STX ) ) != CC_STATE_TX ){}
 
   EIFR  |= INT_MASK;          // Acknowledge any  previous edges
 }
@@ -136,20 +136,21 @@ void cc_param_read( uint8_t reg, uint8_t nReg, uint8_t *param ) {
 void cc_init(void) {
   uint8_t param[CC1100_PARAM_MAX];
   uint8_t i,len;
-  
-  spi_init();
 
-  spi_deassert();
+  spi_init();
+  spi_select(CCSEL);
+
+  spi_deassert(CCSEL);
   _delay_us(1);
 
-  spi_assert();
+  spi_assert(CCSEL);
   _delay_us(10);
 
-  spi_deassert();
+  spi_deassert(CCSEL);
   _delay_us(41);
 
-  spi_strobe(CC1100_SRES);
-  //spi_strobe(CC1100_SCAL);
+  spi_strobe( CCSEL, CC1100_SRES );
+  //spi_strobe( CCSEL, CC1100_SCAL );
   
   len = cc_cfg_get( 0, param, sizeof(param) );
   for ( i=0 ; i<len ; i++ )

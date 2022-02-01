@@ -41,7 +41,7 @@ static void spi_set_clock( uint32_t Fosc, uint32_t sckFreq )
 void spi_init(void) {
   SPI_PORT |= ( 1 << SPI_SCLK );
 
-  SPI_DDR |= ( 1 << SPI_MOSI ) | ( 1 << SPI_SCLK ) | ( 1 << SPI_SS );
+  SPI_DDR |= ( 1 << SPI_MOSI ) | ( 1 << SPI_SCLK );
   SPI_DDR &= ~(1 << SPI_MISO);
 
   SPCR = 0;
@@ -49,12 +49,16 @@ void spi_init(void) {
   SPCR |= ( 1 << MSTR ) | ( 1 << SPE ) ;
 }
 
-void spi_deassert(void) {
-  SPI_PORT |= (1 << SPI_SS);
+void spi_select( uint8_t ss ) {
+  SPI_DDR |= ( 1 << ss );
 }
 
-void spi_assert(void) {
-  SPI_PORT &= ~(1 << SPI_SS);
+void spi_deassert( uint8_t ss ) {
+  SPI_PORT |= (1 << ss);
+}
+
+void spi_assert( uint8_t ss ) {
+  SPI_PORT &= ~(1 << ss);
 }
 
 uint8_t spi_check_miso(void) {
@@ -67,13 +71,13 @@ uint8_t spi_send(uint8_t data) {
   return SPDR;
 }
 
-uint8_t spi_strobe(uint8_t b) {
+uint8_t spi_strobe( uint8_t ss, uint8_t b) {
   uint8_t result;
-  spi_assert();
+  spi_assert(ss);
   while( spi_check_miso() );
   result = spi_send(b);
   while( spi_check_miso() );
-  spi_deassert();
+  spi_deassert(ss);
   return result;
 }
 
