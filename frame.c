@@ -134,7 +134,6 @@ static uint32_t syncWord;
 
 void frame_rx_byte(uint8_t byte) {
   switch( rxFrm.state ) {
-
   case FRM_RX_IDLE:
     rxFrm.syncBuffer = byte;
     if( byte == evo_hdr[0] )
@@ -143,9 +142,9 @@ void frame_rx_byte(uint8_t byte) {
 
   case FRM_RX_SYNCH:
     rxFrm.syncBuffer <<= 8;
-  	if( ( byte==0x00 ) || ( byte==0xFF ) || ( rxFrm.syncBuffer & 0xFF000000 ) ) {
+    if( ( byte==0x00 ) || ( byte==0xFF ) || ( rxFrm.syncBuffer & 0xFF000000 ) ) {
       rxFrm.state = FRM_RX_IDLE;
-	  break;
+      break;
     }
 
     rxFrm.syncBuffer |= byte;
@@ -158,7 +157,7 @@ void frame_rx_byte(uint8_t byte) {
         DEBUG_FRAME(1);
       }
     }
-	break;
+    break;
 
   case FRM_RX_MESSAGE:
     if( byte==0x00 ) {
@@ -296,17 +295,17 @@ uint8_t frame_tx_byte(uint8_t *byte) {
   switch( txFrm.state ) {
   case FRM_TX_IDLE:
 
-    // Fall through
     txFrm.state = FRM_TX_PREFIX;
+    // Fall through
   case FRM_TX_PREFIX:
     if( txFrm.count < sizeof(tx_prefix) ) {
       (*byte) = tx_prefix[txFrm.count++];
       break;
     }
 
-    // Fall through
     txFrm.count = 0;
     txFrm.state = FRM_TX_MESSAGE;
+    // Fall through
   case FRM_TX_MESSAGE:
     if( txFrm.count < txFrm.nBytes ) {
       (*byte) = txFrm.raw[ txFrm.count++ ];
@@ -315,9 +314,9 @@ uint8_t frame_tx_byte(uint8_t *byte) {
 
     msg_tx_end( txFrm.nBytes );
 
-    // Fall through
     txFrm.count = 0;
     txFrm.state = FRM_TX_SUFFIX;
+    // Fall through
   case FRM_TX_SUFFIX:
     if( txFrm.count < sizeof(tx_suffix) ) {
       (*byte) = tx_suffix[txFrm.count++];
@@ -326,9 +325,9 @@ uint8_t frame_tx_byte(uint8_t *byte) {
       break;
     }
 
-    // Fall through
     txFrm.count = 0;
     txFrm.state = FRM_TX_DONE;
+    // Fall through
   case FRM_TX_DONE:
     done = 1;
     (*byte) = TRAIN;
@@ -401,7 +400,7 @@ void frame_work(void) {
     }
     if( rxFrm.state<FRM_RX_MESSAGE ) {
       if( txFrm.state==FRM_TX_READY ) {
-        frame_tx_enable();
+      frame_tx_enable();
       } else if( rxFrm.state==FRM_RX_OFF ) {
         frame_rx_enable();
       }
