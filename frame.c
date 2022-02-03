@@ -270,7 +270,7 @@ static uint8_t tx_suffix[] = {
   TRAIN,                          // Training
 };
 
-void frame_tx_start( uint8_t *raw, uint8_t nRaw ) {
+void frame_tx_ready( uint8_t *raw, uint8_t nRaw ) {
   uint8_t i, done, byte;
 
   // Encode raw frame
@@ -346,24 +346,31 @@ static void frame_tx_done(void) {
 ** External interface
 */
 
-static void frame_rx_enable(void) {
-  uart_disable();
-  cc_enter_rx_mode();
-
+static void frame_rx_start(void) {
   frame.state = FRM_RX;
   rxFrm.state = FRM_RX_IDLE;
 
   uart_rx_enable();
+}
+static void frame_rx_enable(void) {
+  uart_disable();
+  cc_enter_rx_mode();
+
+  frame_rx_start();
+}
+
+static void frame_tx_start(void) {
+  frame.state = FRM_TX;
+  txFrm.state = FRM_TX_IDLE;
+
+  uart_tx_enable();
 }
 
 static void frame_tx_enable(void) {
   uart_disable();
   cc_enter_tx_mode();
 
-  frame.state = FRM_TX;
-  txFrm.state = FRM_TX_IDLE;
-
-  uart_tx_enable();
+  frame_tx_start();
 }
 
 void frame_disable(void) {
@@ -387,6 +394,7 @@ void frame_init(void) {
 
 void frame_work(void) {
   uart_work();
+
   switch( frame.state ) {
   case FRM_IDLE:
     if( rxFrm.state==FRM_RX_OFF ) {
@@ -397,12 +405,12 @@ void frame_work(void) {
   case FRM_RX:
     if( rxFrm.state>=FRM_RX_DONE ) {
       frame_rx_done();
+      frame_rx_start(); // Immediately allow rx of another frame
     }
-    if( rxFrm.state<FRM_RX_MESSAGE ) {
-      if( txFrm.state==FRM_TX_READY ) {
-      frame_tx_enable();
-      } else if( rxFrm.state==FRM_RX_OFF ) {
-        frame_rx_enable();
+
+    if( rxFrm.state<FRM_RX_SYNCH ) {
+      if( txFrm.state==FRM_TX_READY && !uart_carrier_sense() ) {
+        frame_tx_enable();  // RX not active and not about to start so can TX
       }
     }
     break;
@@ -410,7 +418,10 @@ void frame_work(void) {
   case FRM_TX:
     if( txFrm.state>=FRM_TX_DONE ) {
       frame_tx_done();
-      frame_rx_enable();
+    } else if ( txFrm.state==FRM_TX_READY ) {
+      frame_tx_start();  // If we have another frame TX now without disabling TX
+    } else if ( txFrm.state==FRM_TX_OFF ) {
+      frame_rx_enable(); // Nothing to TX, Switch back to RX 
     }
     break;
   }

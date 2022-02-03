@@ -1018,7 +1018,7 @@ static void msg_tx_start( struct message **msg ) {
   if( msg && (*msg) ) {
     TxMsg = (*msg);
 	TxMsg->csum = msg_checksum( TxMsg );
-    frame_tx_start( TxMsg->raw, MAX_RAW );
+    frame_tx_ready( TxMsg->raw, MAX_RAW );
     (*msg) = NULL;
   }
 }
