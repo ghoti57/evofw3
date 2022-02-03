@@ -453,7 +453,7 @@ void rx_init(void) {
   UCSR1A = ( 1<<TXC1 )    // Clear TX interrupt
          | ( 0<<U2X1 )    // No Double speed
          | ( 0<<MPCM1 );  // No Multi-processor Command Mode
-  	     
+
   UCSR1B = ( 0<<RXCIE1 )  // Disable RX complete interrupt
          | ( 0<<TXCIE1 )  // Disable TX complete interrupt
          | ( 0<<UDRIE1 )  // disable UDR Empty interrupt
@@ -709,10 +709,17 @@ void uart_tx_enable(void) {
   SREG = sreg;
 }
 
+uint8_t uart_carrier_sense(void) {
+  static uint8_t history = 0xff;
+  uint8_t bit = ( GDO0_PORT & GDO0_IN )? 1:0;
+  history = ( history<<1 ) | bit;
+  return history; 
+}
+
 void uart_disable(void) {
   uint8_t sreg = SREG;
   cli();
-	
+
   rx_stop();
   tx_stop();
 

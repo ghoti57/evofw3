@@ -7,6 +7,7 @@
 
 extern void uart_rx_enable(void);
 extern void uart_tx_enable(void);
+extern uint8_t uart_carrier_sense(void);
 extern void uart_disable(void);
 
 extern void uart_init(void);

@@ -69,7 +69,7 @@ void cc_enter_rx_mode(void) {
 
   while ( CC_STATE( spi_strobe( CCSEL, CC1100_SIDLE ) ) != CC_STATE_IDLE ){}
 
-  cc_write( CC1100_IOCFG0, 0x2E );      // GDO0 not needed
+  cc_write( CC1100_IOCFG0, 0x0E );      // Carrier sense
   cc_write( CC1100_PKTCTRL0, 0x32 );	// Asynchronous, infinite packet
 
   spi_strobe( CCSEL, CC1100_SFRX );
@@ -93,7 +93,7 @@ void cc_enter_tx_mode(void) {
 }
 
 void cc_fifo_end(void) {
-  cc_write( CC1100_IOCFG0, 0x05 ); 		// Rising edge, TX Fifo empty
+  cc_write( CC1100_IOCFG0, 0x05 );    // Rising edge, TX Fifo empty
 }
 
 uint8_t cc_read_rssi(void) {
@@ -110,11 +110,11 @@ uint8_t cc_param( uint8_t reg, uint8_t nReg, uint8_t *param ) {
   if( reg<CC1100_PARAM_MAX && (reg+nReg)<CC1100_PARAM_MAX ) {
     uint8_t eimsk = EIMSK;
     valid = 1;
-	
+
     cc_enter_idle_mode();
     while( nReg && reg<CC1100_PARAM_MAX ) {
       cc_write( reg, (*param) );
-	  reg++; nReg--; param++;
+      reg++; nReg--; param++;
     }
     cc_enter_rx_mode();
 
@@ -128,7 +128,7 @@ void cc_param_read( uint8_t reg, uint8_t nReg, uint8_t *param ) {
   if( param ) {
     while( nReg && reg<CC1100_PARAM_MAX ) {
       (*param) = cc_read( reg );
-	  reg++; nReg--; param++;
+      reg++; nReg--; param++;
     }
   }
 }
