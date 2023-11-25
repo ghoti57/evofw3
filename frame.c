@@ -156,6 +156,7 @@ void frame_rx_byte(uint8_t byte) {
         rxFrm.nRaw = rxFrm.raw[0];
         rxFrm.state  = FRM_RX_MESSAGE;
         DEBUG_FRAME(1);
+		led_on();
       }
     }
 	break;
@@ -219,6 +220,7 @@ static void frame_rx_done(void) {
   msg_rx_rssi( rssi );
   msg_rx_end(nBytes,msgErr);
 
+  led_off();
   DEBUG_FRAME(0);
 }
 

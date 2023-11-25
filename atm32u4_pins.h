@@ -108,8 +108,9 @@
 #define TTY_USB
 
 // LED
-//#define LED_DDR   DDRB
-//#define LED_PORT  PORTB
-//#define LED_PIN   5
+#define HAS_LED
+#define LED_DDR   DDRC
+#define LED_PORT  PORTC
+#define LED_PIN   7
 
 #endif
