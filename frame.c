@@ -156,7 +156,7 @@ void frame_rx_byte(uint8_t byte) {
         rxFrm.nRaw = rxFrm.raw[0];
         rxFrm.state  = FRM_RX_MESSAGE;
         DEBUG_FRAME(1);
-		led_on();
+        led_on();
       }
     }
 	break;
@@ -289,6 +289,7 @@ void frame_tx_start( uint8_t *raw, uint8_t nRaw ) {
   txFrm.nRaw = nRaw;
 	
   txFrm.state = FRM_TX_READY;
+  led_on();
 }
 
 uint8_t frame_tx_byte(uint8_t *byte) {
@@ -342,6 +343,7 @@ uint8_t frame_tx_byte(uint8_t *byte) {
 static void frame_tx_done(void) {
   msg_tx_done();
   frame_tx_reset();
+  led_off();
 }
 
 /***************************************************************************
