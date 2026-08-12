@@ -42,5 +42,5 @@ Use *Tools*, *Pinout* to select the appropriate connection variant.
 
 Note that the first time you program an avr controller with **evofw3** the COM port may change.
 
-You can buy an Atmega32U4 + 868MHz CC1101 USB stick here
-[https://indalo-tech.onlineweb.shop/](https://indalo-tech.onlineweb.shop/)
+~~You can buy an Atmega32U4 + 868MHz CC1101 USB stick here
+[https://indalo-tech.onlineweb.shop/](https://indalo-tech.onlineweb.shop/)~~
